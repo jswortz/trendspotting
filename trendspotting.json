@@ -149,20 +149,62 @@
           }
         }
       },
+      "comp-bigquery-query-job": {
+        "executorLabel": "exec-bigquery-query-job",
+        "inputDefinitions": {
+          "parameters": {
+            "job_configuration_query": {
+              "type": "STRING"
+            },
+            "labels": {
+              "type": "STRING"
+            },
+            "location": {
+              "type": "STRING"
+            },
+            "project": {
+              "type": "STRING"
+            },
+            "query": {
+              "type": "STRING"
+            },
+            "query_parameters": {
+              "type": "STRING"
+            }
+          }
+        },
+        "outputDefinitions": {
+          "artifacts": {
+            "destination_table": {
+              "artifactType": {
+                "schemaTitle": "google.BQTable",
+                "schemaVersion": "0.0.1"
+              }
+            }
+          },
+          "parameters": {
+            "gcp_resources": {
+              "type": "STRING"
+            }
+          }
+        }
+      },
       "comp-create-prediction-dataset-term-level": {
         "executorLabel": "exec-create-prediction-dataset-term-level",
         "inputDefinitions": {
+          "artifacts": {
+            "source_table_uri": {
+              "artifactType": {
+                "schemaTitle": "system.Artifact",
+                "schemaVersion": "0.0.1"
+              }
+            }
+          },
           "parameters": {
             "override": {
               "type": "STRING"
             },
             "project_id": {
-              "type": "STRING"
-            },
-            "source_creation_dt": {
-              "type": "STRING"
-            },
-            "source_table_uri": {
               "type": "STRING"
             },
             "subcat_id": {
@@ -236,43 +278,22 @@
           }
         }
       },
-      "comp-get-data-create-timestamp": {
-        "executorLabel": "exec-get-data-create-timestamp",
-        "inputDefinitions": {
-          "parameters": {
-            "override": {
-              "type": "STRING"
-            },
-            "project_id": {
-              "type": "STRING"
-            },
-            "source_table_uri": {
-              "type": "STRING"
-            }
-          }
-        },
-        "outputDefinitions": {
-          "parameters": {
-            "source_data_create_dt": {
-              "type": "STRING"
-            }
-          }
-        }
-      },
       "comp-nlp-featurize-and-cluster": {
         "executorLabel": "exec-nlp-featurize-and-cluster",
         "inputDefinitions": {
+          "artifacts": {
+            "source_table": {
+              "artifactType": {
+                "schemaTitle": "system.Artifact",
+                "schemaVersion": "0.0.1"
+              }
+            }
+          },
           "parameters": {
             "override": {
               "type": "STRING"
             },
             "project_id": {
-              "type": "STRING"
-            },
-            "source_creation_dt": {
-              "type": "STRING"
-            },
-            "source_table": {
               "type": "STRING"
             },
             "subcat_id": {
@@ -538,6 +559,33 @@
             "image": "gcr.io/ml-pipeline/google-cloud-pipeline-components:latest"
           }
         },
+        "exec-bigquery-query-job": {
+          "container": {
+            "args": [
+              "--type",
+              "BigqueryQueryJob",
+              "--project",
+              "{{$.inputs.parameters['project']}}",
+              "--location",
+              "{{$.inputs.parameters['location']}}",
+              "--payload",
+              "{\"configuration\": {\"query\": {{$.inputs.parameters['job_configuration_query']}}, \"labels\": {{$.inputs.parameters['labels']}}}}",
+              "--job_configuration_query_override",
+              "{\"query\": \"{{$.inputs.parameters['query']}}\", \"query_parameters\": {{$.inputs.parameters['query_parameters']}}, \"destination_encryption_configuration\": {\"kmsKeyName\": \"\"}}",
+              "--gcp_resources",
+              "{{$.outputs.parameters['gcp_resources'].output_file}}",
+              "--executor_input",
+              "{{$}}"
+            ],
+            "command": [
+              "python3",
+              "-u",
+              "-m",
+              "google_cloud_pipeline_components.container.experimental.gcp_launcher.launcher"
+            ],
+            "image": "gcr.io/ml-pipeline/google-cloud-pipeline-components:latest"
+          }
+        },
         "exec-create-prediction-dataset-term-level": {
           "container": {
             "args": [
@@ -553,7 +601,7 @@
               "sh",
               "-ec",
               "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
-              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef create_prediction_dataset_term_level(\n      target_table: str,\n      source_table_uri: str,\n      train_st: str,\n      train_end: str,\n      valid_st: str,\n      valid_end: str,\n      source_creation_dt: str,\n      subcat_id: int = 10047,\n      override: str = 'False',\n      project_id: str = 'cpg-cdp'\n    ) -> NamedTuple('Outputs', [('training_data_table_uri', str)]):\n\n    from google.cloud import bigquery\n\n    override = bool(override)\n    bq_client = bigquery.Client(project=project_id)\n    (\n    bq_client.query(\n      f\"\"\"CREATE TEMPORARY FUNCTION arr_to_input_20(arr ARRAY<FLOAT64>)\n        RETURNS \n        STRUCT<p1 FLOAT64, p2 FLOAT64, p3 FLOAT64, p4 FLOAT64,\n               p5 FLOAT64, p6 FLOAT64, p7 FLOAT64, p8 FLOAT64, \n               p9 FLOAT64, p10 FLOAT64, p11 FLOAT64, p12 FLOAT64, \n               p13 FLOAT64, p14 FLOAT64, p15 FLOAT64, p16 FLOAT64,\n               p17 FLOAT64, p18 FLOAT64, p19 FLOAT64, p20 FLOAT64>\n        AS (\n        STRUCT(\n            arr[OFFSET(0)]\n            , arr[OFFSET(1)]\n            , arr[OFFSET(2)]\n            , arr[OFFSET(3)]\n            , arr[OFFSET(4)]\n            , arr[OFFSET(5)]\n            , arr[OFFSET(6)]\n            , arr[OFFSET(7)]\n            , arr[OFFSET(8)]\n            , arr[OFFSET(9)]\n            , arr[OFFSET(10)]\n            , arr[OFFSET(11)]\n            , arr[OFFSET(12)]\n            , arr[OFFSET(13)]\n            , arr[OFFSET(14)]\n            , arr[OFFSET(15)]\n            , arr[OFFSET(16)]\n            , arr[OFFSET(17)]\n            , arr[OFFSET(18)]\n            , arr[OFFSET(19)]    \n        ));\n\n\n        CREATE OR REPLACE TABLE `{target_table}` as (\n            SELECT * except(output_0), case when date between \"{train_st}\" and \"{train_end}\" then 'TRAIN'\n                  when date between \"{valid_st}\" and \"{valid_end}\" then 'VALIDATE'\n                 else 'TEST' end as split_col,\n            arr_to_input_20(output_0) as embed\n        FROM ML.PREDICT(MODEL trendspotting.swivel_text_embed,(\n          SELECT date, geo_id, term AS sentences, category_rank, concat( term, geo_id) as series_id\n          FROM `{source_table_uri}` where subcategory_id = {subcat_id}\n        ))\n        )\n          \"\"\"\n    )\n    .result()\n    )\n\n    return (\n    f'{target_table}',\n    )\n\n"
+              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef create_prediction_dataset_term_level(\n      target_table: str,\n      source_table_uri: Input[Artifact],\n      train_st: str,\n      train_end: str,\n      valid_st: str,\n      valid_end: str,\n      subcat_id: int = 10047,\n      override: str = 'False',\n      project_id: str = 'cpg-cdp'\n    ) -> NamedTuple('Outputs', [('training_data_table_uri', str)]):\n\n    from google.cloud import bigquery\n\n    override = bool(override)\n    source_table_no_bq = source_table_uri.uri.strip(\"bq://\")\n    bq_client = bigquery.Client(project=project_id)\n    (\n    bq_client.query(\n      f\"\"\"CREATE TEMPORARY FUNCTION arr_to_input_20(arr ARRAY<FLOAT64>)\n        RETURNS \n        STRUCT<p1 FLOAT64, p2 FLOAT64, p3 FLOAT64, p4 FLOAT64,\n               p5 FLOAT64, p6 FLOAT64, p7 FLOAT64, p8 FLOAT64, \n               p9 FLOAT64, p10 FLOAT64, p11 FLOAT64, p12 FLOAT64, \n               p13 FLOAT64, p14 FLOAT64, p15 FLOAT64, p16 FLOAT64,\n               p17 FLOAT64, p18 FLOAT64, p19 FLOAT64, p20 FLOAT64>\n        AS (\n        STRUCT(\n            arr[OFFSET(0)]\n            , arr[OFFSET(1)]\n            , arr[OFFSET(2)]\n            , arr[OFFSET(3)]\n            , arr[OFFSET(4)]\n            , arr[OFFSET(5)]\n            , arr[OFFSET(6)]\n            , arr[OFFSET(7)]\n            , arr[OFFSET(8)]\n            , arr[OFFSET(9)]\n            , arr[OFFSET(10)]\n            , arr[OFFSET(11)]\n            , arr[OFFSET(12)]\n            , arr[OFFSET(13)]\n            , arr[OFFSET(14)]\n            , arr[OFFSET(15)]\n            , arr[OFFSET(16)]\n            , arr[OFFSET(17)]\n            , arr[OFFSET(18)]\n            , arr[OFFSET(19)]    \n        ));\n\n\n        CREATE OR REPLACE TABLE `{target_table}` as (\n            SELECT * except(output_0), case when date between \"{train_st}\" and \"{train_end}\" then 'TRAIN'\n                  when date between \"{valid_st}\" and \"{valid_end}\" then 'VALIDATE'\n                 else 'TEST' end as split_col,\n            arr_to_input_20(output_0) as embed\n        FROM ML.PREDICT(MODEL trendspotting.swivel_text_embed,(\n          SELECT date, geo_id, term AS sentences, category_rank, concat( term, geo_id) as series_id\n          FROM `cpg-cdp.trendspotting.futurama_weekly` where subcategory_id = {subcat_id}\n        ))\n        )\n          \"\"\"\n    )\n    .result()\n    )\n\n    return (\n    f'{target_table}',\n    )\n\n"
             ],
             "image": "python:3.9"
           }
@@ -578,26 +626,6 @@
             "image": "python:3.9"
           }
         },
-        "exec-get-data-create-timestamp": {
-          "container": {
-            "args": [
-              "--executor_input",
-              "{{$}}",
-              "--function_to_execute",
-              "get_data_create_timestamp"
-            ],
-            "command": [
-              "sh",
-              "-c",
-              "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet     --no-warn-script-location 'google-cloud-bigquery==2.18.0' 'kfp==1.8.11' && \"$0\" \"$@\"\n",
-              "sh",
-              "-ec",
-              "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
-              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef get_data_create_timestamp(\n      source_table_uri: str,\n      override: str = 'False',\n      project_id: str = 'cpg-cdp'\n    ) -> NamedTuple('Outputs', [('source_data_create_dt', str)]):\n\n    from google.cloud import bigquery\n\n    override = bool(override)\n    bq_client = bigquery.Client(project=project_id)\n    dt = bq_client.query(\n      f\"SELECT creation_time FROM cpg-cdp.trendspotting.INFORMATION_SCHEMA.TABLES where table_name = '{source_table_uri}';\").result()\n    return (str(dt))\n\n"
-            ],
-            "image": "python:3.9"
-          }
-        },
         "exec-nlp-featurize-and-cluster": {
           "container": {
             "args": [
@@ -613,7 +641,7 @@
               "sh",
               "-ec",
               "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
-              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef nlp_featurize_and_cluster(\n    source_table: str,\n    target_table: str,\n    train_st: str,\n    train_end: str,\n    source_creation_dt: str,\n    subcat_id: int = 10047,\n    override: str = 'False',\n    project_id: str = 'cpg-cdp'\n    ) -> NamedTuple('Outputs', [('term_cluster_table', str)]):\n\n    from google.cloud import bigquery\n\n    bq_client = bigquery.Client(project=project_id)\n    (\n    bq_client.query(\n      f\"\"\"\n            CREATE TEMPORARY FUNCTION arr_to_input_20(arr ARRAY<FLOAT64>)\n            RETURNS \n            STRUCT<p1 FLOAT64, p2 FLOAT64, p3 FLOAT64, p4 FLOAT64,\n                   p5 FLOAT64, p6 FLOAT64, p7 FLOAT64, p8 FLOAT64, \n                   p9 FLOAT64, p10 FLOAT64, p11 FLOAT64, p12 FLOAT64, \n                   p13 FLOAT64, p14 FLOAT64, p15 FLOAT64, p16 FLOAT64,\n                   p17 FLOAT64, p18 FLOAT64, p19 FLOAT64, p20 FLOAT64>\n            AS (\n            STRUCT(\n                arr[OFFSET(0)]\n                , arr[OFFSET(1)]\n                , arr[OFFSET(2)]\n                , arr[OFFSET(3)]\n                , arr[OFFSET(4)]\n                , arr[OFFSET(5)]\n                , arr[OFFSET(6)]\n                , arr[OFFSET(7)]\n                , arr[OFFSET(8)]\n                , arr[OFFSET(9)]\n                , arr[OFFSET(10)]\n                , arr[OFFSET(11)]\n                , arr[OFFSET(12)]\n                , arr[OFFSET(13)]\n                , arr[OFFSET(14)]\n                , arr[OFFSET(15)]\n                , arr[OFFSET(16)]\n                , arr[OFFSET(17)]\n                , arr[OFFSET(18)]\n                , arr[OFFSET(19)]    \n            ));\n\n            CREATE OR REPLACE TABLE {target_table} as ( #\n                select * \n                from ML.PREDICT(MODEL trendspotting.embed_clustering_100, (\n                    select *, arr_to_input_20(output_0) AS comments_embed from \n                        ML.PREDICT(MODEL trendspotting.swivel_text_embed,(\n                      SELECT date, geo_name, term AS sentences, volume\n                      FROM {source_table}\n                      WHERE date >= '{train_st}' and category_id = {subcat_id}\n                    ))\n                    )\n                )\n            )\n          \"\"\"\n    )\n    .result()\n    )\n\n    return (\n    f'{target_table}',\n    )\n\n"
+              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef nlp_featurize_and_cluster(\n    source_table: Input[Artifact],\n    target_table: str,\n    train_st: str,\n    train_end: str,\n    subcat_id: int = 10047,\n    override: str = 'False',\n    project_id: str = 'cpg-cdp'\n    ) -> NamedTuple('Outputs', [('term_cluster_table', str)]):\n\n    from google.cloud import bigquery\n\n    bq_client = bigquery.Client(project=project_id)\n    (\n    bq_client.query(\n      f\"\"\"\n            CREATE TEMPORARY FUNCTION arr_to_input_20(arr ARRAY<FLOAT64>)\n            RETURNS \n            STRUCT<p1 FLOAT64, p2 FLOAT64, p3 FLOAT64, p4 FLOAT64,\n                   p5 FLOAT64, p6 FLOAT64, p7 FLOAT64, p8 FLOAT64, \n                   p9 FLOAT64, p10 FLOAT64, p11 FLOAT64, p12 FLOAT64, \n                   p13 FLOAT64, p14 FLOAT64, p15 FLOAT64, p16 FLOAT64,\n                   p17 FLOAT64, p18 FLOAT64, p19 FLOAT64, p20 FLOAT64>\n            AS (\n            STRUCT(\n                arr[OFFSET(0)]\n                , arr[OFFSET(1)]\n                , arr[OFFSET(2)]\n                , arr[OFFSET(3)]\n                , arr[OFFSET(4)]\n                , arr[OFFSET(5)]\n                , arr[OFFSET(6)]\n                , arr[OFFSET(7)]\n                , arr[OFFSET(8)]\n                , arr[OFFSET(9)]\n                , arr[OFFSET(10)]\n                , arr[OFFSET(11)]\n                , arr[OFFSET(12)]\n                , arr[OFFSET(13)]\n                , arr[OFFSET(14)]\n                , arr[OFFSET(15)]\n                , arr[OFFSET(16)]\n                , arr[OFFSET(17)]\n                , arr[OFFSET(18)]\n                , arr[OFFSET(19)]    \n            ));\n\n            CREATE OR REPLACE TABLE {target_table} as ( #\n                select * \n                from ML.PREDICT(MODEL trendspotting.embed_clustering_100, (\n                    select *, arr_to_input_20(output_0) AS comments_embed from \n                        ML.PREDICT(MODEL trendspotting.swivel_text_embed,(\n                      SELECT date, geo_name, term AS sentences, volume\n                      FROM `cpg-cdp.trendspotting.futurama_weekly`\n                      WHERE date >= '{train_st}' and category_id = {subcat_id}\n                    ))\n                    )\n                )\n            )\n          \"\"\"\n    )\n    .result()\n    )\n\n    return (\n    f'{target_table}',\n    )\n\n"
             ],
             "image": "python:3.9"
           }
@@ -863,7 +891,7 @@
                   }
                 },
                 "budget_milli_node_hours": {
-                  "componentInputParameter": "budget_milli_node_hours"
+                  "componentInputParameter": "budget_milli_node_hours_cluster"
                 },
                 "column_transformations": {
                   "runtimeValue": {
@@ -907,6 +935,63 @@
               "name": "automlforecastingtrainingjob-run-with-experiments-2"
             }
           },
+          "bigquery-query-job": {
+            "cachingOptions": {
+              "enableCache": true
+            },
+            "componentRef": {
+              "name": "comp-bigquery-query-job"
+            },
+            "inputs": {
+              "parameters": {
+                "job_configuration_query": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": "{}"
+                    }
+                  }
+                },
+                "labels": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": "{}"
+                    }
+                  }
+                },
+                "location": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": "us-central1"
+                    }
+                  }
+                },
+                "project": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": "cpg-cdp"
+                    }
+                  }
+                },
+                "query": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": "select distinct date from cgp-cdp.trendspotting.futurama_weekly"
+                    }
+                  }
+                },
+                "query_parameters": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": "[]"
+                    }
+                  }
+                }
+              }
+            },
+            "taskInfo": {
+              "name": "bigquery-query-job"
+            }
+          },
           "create-prediction-dataset-term-level": {
             "cachingOptions": {
               "enableCache": true
@@ -915,9 +1000,17 @@
               "name": "comp-create-prediction-dataset-term-level"
             },
             "dependentTasks": [
-              "get-data-create-timestamp"
+              "bigquery-query-job"
             ],
             "inputs": {
+              "artifacts": {
+                "source_table_uri": {
+                  "taskOutputArtifact": {
+                    "outputArtifactKey": "destination_table",
+                    "producerTask": "bigquery-query-job"
+                  }
+                }
+              },
               "parameters": {
                 "override": {
                   "runtimeValue": {
@@ -932,15 +1025,6 @@
                       "stringValue": "cpg-cdp"
                     }
                   }
-                },
-                "source_creation_dt": {
-                  "taskOutputParameter": {
-                    "outputParameterKey": "source_data_create_dt",
-                    "producerTask": "get-data-create-timestamp"
-                  }
-                },
-                "source_table_uri": {
-                  "componentInputParameter": "source_table"
                 },
                 "subcat_id": {
                   "runtimeValue": {
@@ -1033,38 +1117,6 @@
               "name": "create-top-mover-table"
             }
           },
-          "get-data-create-timestamp": {
-            "cachingOptions": {
-              "enableCache": true
-            },
-            "componentRef": {
-              "name": "comp-get-data-create-timestamp"
-            },
-            "inputs": {
-              "parameters": {
-                "override": {
-                  "runtimeValue": {
-                    "constantValue": {
-                      "stringValue": "False"
-                    }
-                  }
-                },
-                "project_id": {
-                  "runtimeValue": {
-                    "constantValue": {
-                      "stringValue": "cpg-cdp"
-                    }
-                  }
-                },
-                "source_table_uri": {
-                  "componentInputParameter": "source_table"
-                }
-              }
-            },
-            "taskInfo": {
-              "name": "get-data-create-timestamp"
-            }
-          },
           "nlp-featurize-and-cluster": {
             "cachingOptions": {
               "enableCache": true
@@ -1073,9 +1125,17 @@
               "name": "comp-nlp-featurize-and-cluster"
             },
             "dependentTasks": [
-              "get-data-create-timestamp"
+              "bigquery-query-job"
             ],
             "inputs": {
+              "artifacts": {
+                "source_table": {
+                  "taskOutputArtifact": {
+                    "outputArtifactKey": "destination_table",
+                    "producerTask": "bigquery-query-job"
+                  }
+                }
+              },
               "parameters": {
                 "override": {
                   "runtimeValue": {
@@ -1090,15 +1150,6 @@
                       "stringValue": "cpg-cdp"
                     }
                   }
-                },
-                "source_creation_dt": {
-                  "taskOutputParameter": {
-                    "outputParameterKey": "source_data_create_dt",
-                    "producerTask": "get-data-create-timestamp"
-                  }
-                },
-                "source_table": {
-                  "componentInputParameter": "source_table"
                 },
                 "subcat_id": {
                   "runtimeValue": {
@@ -1258,6 +1309,9 @@
           "budget_milli_node_hours": {
             "type": "INT"
           },
+          "budget_milli_node_hours_cluster": {
+            "type": "INT"
+          },
           "context_window": {
             "type": "INT"
           },
@@ -1329,6 +1383,9 @@
     "parameters": {
       "budget_milli_node_hours": {
         "intValue": "1000"
+      },
+      "budget_milli_node_hours_cluster": {
+        "intValue": "2000"
       },
       "source_table": {
         "stringValue": "cpg-cdp.trendspotting.futurama_weekly"
