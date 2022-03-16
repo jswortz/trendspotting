@@ -153,6 +153,9 @@
         "executorLabel": "exec-bigquery-query-job",
         "inputDefinitions": {
           "parameters": {
+            "encryption_spec_key_name": {
+              "type": "STRING"
+            },
             "job_configuration_query": {
               "type": "STRING"
             },
@@ -571,7 +574,7 @@
               "--payload",
               "{\"configuration\": {\"query\": {{$.inputs.parameters['job_configuration_query']}}, \"labels\": {{$.inputs.parameters['labels']}}}}",
               "--job_configuration_query_override",
-              "{\"query\": \"{{$.inputs.parameters['query']}}\", \"query_parameters\": {{$.inputs.parameters['query_parameters']}}, \"destination_encryption_configuration\": {\"kmsKeyName\": \"\"}}",
+              "{\"query\": \"{{$.inputs.parameters['query']}}\", \"query_parameters\": {{$.inputs.parameters['query_parameters']}}, \"destination_encryption_configuration\": {\"kmsKeyName\": \"{{$.inputs.parameters['encryption_spec_key_name']}}\"}}",
               "--gcp_resources",
               "{{$.outputs.parameters['gcp_resources'].output_file}}",
               "--executor_input",
@@ -944,6 +947,13 @@
             },
             "inputs": {
               "parameters": {
+                "encryption_spec_key_name": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": "projects/cpg-cdp/locations/us-central1/keyRings/central-bq-cmek/cryptoKeys/bq-vertex"
+                    }
+                  }
+                },
                 "job_configuration_query": {
                   "runtimeValue": {
                     "constantValue": {
@@ -961,9 +971,12 @@
                 "location": {
                   "runtimeValue": {
                     "constantValue": {
-                      "stringValue": "us-central1"
+                      "stringValue": "US"
                     }
                   }
+                },
+                "pipelineparam--source_table": {
+                  "componentInputParameter": "source_table"
                 },
                 "project": {
                   "runtimeValue": {
@@ -975,7 +988,7 @@
                 "query": {
                   "runtimeValue": {
                     "constantValue": {
-                      "stringValue": "select distinct date from cgp-cdp.trendspotting.futurama_weekly"
+                      "stringValue": "select distinct date from {{$.inputs.parameters['pipelineparam--source_table']}}"
                     }
                   }
                 },
