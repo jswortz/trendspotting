@@ -5,6 +5,9 @@
         "executorLabel": "exec-aggregate-clusters",
         "inputDefinitions": {
           "parameters": {
+            "model_name": {
+              "type": "STRING"
+            },
             "override": {
               "type": "STRING"
             },
@@ -221,6 +224,46 @@
           }
         }
       },
+      "comp-bigquery-create-model-job": {
+        "executorLabel": "exec-bigquery-create-model-job",
+        "inputDefinitions": {
+          "parameters": {
+            "job_configuration_query": {
+              "type": "STRING"
+            },
+            "labels": {
+              "type": "STRING"
+            },
+            "location": {
+              "type": "STRING"
+            },
+            "project": {
+              "type": "STRING"
+            },
+            "query": {
+              "type": "STRING"
+            },
+            "query_parameters": {
+              "type": "STRING"
+            }
+          }
+        },
+        "outputDefinitions": {
+          "artifacts": {
+            "model": {
+              "artifactType": {
+                "schemaTitle": "google.BQMLModel",
+                "schemaVersion": "0.0.1"
+              }
+            }
+          },
+          "parameters": {
+            "gcp_resources": {
+              "type": "STRING"
+            }
+          }
+        }
+      },
       "comp-create-prediction-dataset-term-level": {
         "executorLabel": "exec-create-prediction-dataset-term-level",
         "inputDefinitions": {
@@ -309,6 +352,9 @@
         "executorLabel": "exec-nlp-featurize-and-cluster",
         "inputDefinitions": {
           "parameters": {
+            "model_name": {
+              "type": "STRING"
+            },
             "override": {
               "type": "STRING"
             },
@@ -448,7 +494,7 @@
               "sh",
               "-ec",
               "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
-              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef aggregate_clusters(\n    source_table: str,\n    target_table: str,\n    train_st: str,\n    train_end: str,\n    valid_st: str,\n    valid_end: str,\n    override: str = 'False',\n    project_id: str = 'cpg-cdp'\n    ) -> NamedTuple('Outputs', [('term_cluster_agg_table', str)]):\n\n    from google.cloud import bigquery\n\n    source_table_no_bq = source_table.strip('bq://')\n\n    target_bq_table = 'bq://' + target_table\n\n    bq_client = bigquery.Client(project=project_id)\n    (\n    bq_client.query(\n      f\"\"\"\n            CREATE OR REPLACE TABLE {target_table} as (\n            with centroids as (select * from \n            (SELECT\n            centroid_id, feature, numerical_value\n            FROM\n              ML.CENTROIDS(MODEL `trendspotting.embed_clustering_100`)\n            )\n            PIVOT(avg(numerical_value) for feature in ('comments_embed_p1',\n            'comments_embed_p2',\n            'comments_embed_p3',\n            'comments_embed_p4',\n            'comments_embed_p5',\n            'comments_embed_p6',\n            'comments_embed_p7',\n            'comments_embed_p8',\n            'comments_embed_p9',\n            'comments_embed_p10',\n            'comments_embed_p11',\n            'comments_embed_p12',\n            'comments_embed_p13',\n            'comments_embed_p14',\n            'comments_embed_p15',\n            'comments_embed_p16',\n            'comments_embed_p17',\n            'comments_embed_p18',\n            'comments_embed_p19',\n            'comments_embed_p20'))\n                              )\n            select volume, date, b.*,\n            case when date between '{train_st}' and  '{train_end}' then 'TRAIN'\n                      when date between '{valid_st}' and '{valid_end}' then 'VALIDATE'\n                     else 'TEST' end as split_col\n            from (\n                select sum(volume) as volume, date, centroid_id \n                from {source_table} group by date, centroid_id\n            ) a\n            inner join centroids b on a.centroid_id = b.centroid_id\n            )\n          \"\"\"\n    )\n    .result()\n    )\n\n    return (\n    f'{target_bq_table}',\n    )\n\n"
+              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef aggregate_clusters(\n    source_table: str,\n    target_table: str,\n    train_st: str,\n    train_end: str,\n    valid_st: str,\n    valid_end: str,\n    model_name: str,\n    override: str = 'False',\n    project_id: str = 'cpg-cdp'\n    ) -> NamedTuple('Outputs', [('term_cluster_agg_table', str)]):\n\n    from google.cloud import bigquery\n\n    source_table_no_bq = source_table.strip('bq://')\n\n    target_bq_table = 'bq://' + target_table\n\n    bq_client = bigquery.Client(project=project_id)\n    (\n    bq_client.query(\n      f\"\"\"\n            CREATE OR REPLACE TABLE `{target_table}` as (\n            with centroids as (select * from \n            (SELECT\n            centroid_id, feature, numerical_value\n            FROM\n              ML.CENTROIDS(MODEL `{model_name}`)\n            )\n            PIVOT(avg(numerical_value) for feature in ('comments_embed_p1',\n            'comments_embed_p2',\n            'comments_embed_p3',\n            'comments_embed_p4',\n            'comments_embed_p5',\n            'comments_embed_p6',\n            'comments_embed_p7',\n            'comments_embed_p8',\n            'comments_embed_p9',\n            'comments_embed_p10',\n            'comments_embed_p11',\n            'comments_embed_p12',\n            'comments_embed_p13',\n            'comments_embed_p14',\n            'comments_embed_p15',\n            'comments_embed_p16',\n            'comments_embed_p17',\n            'comments_embed_p18',\n            'comments_embed_p19',\n            'comments_embed_p20'))\n                              )\n            select volume, date, b.*,\n            case when date between '{train_st}' and  '{train_end}' then 'TRAIN'\n                      when date between '{valid_st}' and '{valid_end}' then 'VALIDATE'\n                     else 'TEST' end as split_col\n            from (\n                select sum(volume) as volume, date, centroid_id \n                from {source_table} group by date, centroid_id\n            ) a\n            inner join centroids b on a.centroid_id = b.centroid_id\n            )\n          \"\"\"\n    )\n    .result()\n    )\n\n    return (\n    f'{target_bq_table}',\n    )\n\n"
             ],
             "image": "python:3.9"
           }
@@ -585,6 +631,33 @@
             "image": "gcr.io/ml-pipeline/google-cloud-pipeline-components:1.0.5"
           }
         },
+        "exec-bigquery-create-model-job": {
+          "container": {
+            "args": [
+              "--type",
+              "BigqueryCreateModelJob",
+              "--project",
+              "{{$.inputs.parameters['project']}}",
+              "--location",
+              "{{$.inputs.parameters['location']}}",
+              "--payload",
+              "{\"configuration\": {\"query\": {{$.inputs.parameters['job_configuration_query']}}, \"labels\": {{$.inputs.parameters['labels']}}}}",
+              "--job_configuration_query_override",
+              "{\"query\": \"{{$.inputs.parameters['query']}}\", \"query_parameters\": {{$.inputs.parameters['query_parameters']}}}",
+              "--gcp_resources",
+              "{{$.outputs.parameters['gcp_resources'].output_file}}",
+              "--executor_input",
+              "{{$}}"
+            ],
+            "command": [
+              "python3",
+              "-u",
+              "-m",
+              "google_cloud_pipeline_components.container.v1.gcp_launcher.launcher"
+            ],
+            "image": "gcr.io/ml-pipeline/google-cloud-pipeline-components:1.0.5"
+          }
+        },
         "exec-create-prediction-dataset-term-level": {
           "container": {
             "args": [
@@ -600,7 +673,7 @@
               "sh",
               "-ec",
               "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
-              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef create_prediction_dataset_term_level(\n      target_table: str,\n      source_table_uri: str,\n      train_st: str,\n      train_end: str,\n      valid_st: str,\n      valid_end: str,\n      subcat_id: int,\n      override: str = 'False',\n      project_id: str = 'cpg-cdp'\n    ) -> NamedTuple('Outputs', [('training_data_table_uri', str)]):\n\n    from google.cloud import bigquery\n\n    override = bool(override)\n    bq_client = bigquery.Client(project=project_id)\n    (\n    bq_client.query(\n      f\"\"\"CREATE TEMPORARY FUNCTION arr_to_input_20(arr ARRAY<FLOAT64>)\n        RETURNS \n        STRUCT<p1 FLOAT64, p2 FLOAT64, p3 FLOAT64, p4 FLOAT64,\n               p5 FLOAT64, p6 FLOAT64, p7 FLOAT64, p8 FLOAT64, \n               p9 FLOAT64, p10 FLOAT64, p11 FLOAT64, p12 FLOAT64, \n               p13 FLOAT64, p14 FLOAT64, p15 FLOAT64, p16 FLOAT64,\n               p17 FLOAT64, p18 FLOAT64, p19 FLOAT64, p20 FLOAT64>\n        AS (\n        STRUCT(\n            arr[OFFSET(0)]\n            , arr[OFFSET(1)]\n            , arr[OFFSET(2)]\n            , arr[OFFSET(3)]\n            , arr[OFFSET(4)]\n            , arr[OFFSET(5)]\n            , arr[OFFSET(6)]\n            , arr[OFFSET(7)]\n            , arr[OFFSET(8)]\n            , arr[OFFSET(9)]\n            , arr[OFFSET(10)]\n            , arr[OFFSET(11)]\n            , arr[OFFSET(12)]\n            , arr[OFFSET(13)]\n            , arr[OFFSET(14)]\n            , arr[OFFSET(15)]\n            , arr[OFFSET(16)]\n            , arr[OFFSET(17)]\n            , arr[OFFSET(18)]\n            , arr[OFFSET(19)]    \n        ));\n\n\n        CREATE OR REPLACE TABLE `{target_table}` as (\n            SELECT * except(output_0), case when date between \"{train_st}\" and \"{train_end}\" then 'TRAIN'\n                  when date between \"{valid_st}\" and \"{valid_end}\" then 'VALIDATE'\n                 else 'TEST' end as split_col,\n            arr_to_input_20(output_0) as embed\n        FROM ML.PREDICT(MODEL trendspotting.swivel_text_embed,\n        (\n          SELECT date, geo_id, term AS sentences, category_rank, concat( term, geo_id) as series_id\n          FROM `{source_table_uri}` where subcategory_id = {subcat_id}\n        ))      \n        )\n          \"\"\"\n    )\n    .result()\n    )\n\n    return (\n    f'{target_table}',\n    )\n\n"
+              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef create_prediction_dataset_term_level(\n      target_table: str,\n      source_table_uri: str,\n      train_st: str,\n      train_end: str,\n      valid_st: str,\n      valid_end: str,\n      subcat_id: int,\n      override: str = 'False',\n      project_id: str = 'cpg-cdp'\n    ) -> NamedTuple('Outputs', [('training_data_table_uri', str)]):\n\n    from google.cloud import bigquery\n\n    override = bool(override)\n    bq_client = bigquery.Client(project=project_id)\n    (\n    bq_client.query(\n      f\"\"\"CREATE TEMPORARY FUNCTION arr_to_input_20(arr ARRAY<FLOAT64>)\n        RETURNS \n        STRUCT<p1 FLOAT64, p2 FLOAT64, p3 FLOAT64, p4 FLOAT64,\n               p5 FLOAT64, p6 FLOAT64, p7 FLOAT64, p8 FLOAT64, \n               p9 FLOAT64, p10 FLOAT64, p11 FLOAT64, p12 FLOAT64, \n               p13 FLOAT64, p14 FLOAT64, p15 FLOAT64, p16 FLOAT64,\n               p17 FLOAT64, p18 FLOAT64, p19 FLOAT64, p20 FLOAT64>\n        AS (\n        STRUCT(\n            arr[OFFSET(0)]\n            , arr[OFFSET(1)]\n            , arr[OFFSET(2)]\n            , arr[OFFSET(3)]\n            , arr[OFFSET(4)]\n            , arr[OFFSET(5)]\n            , arr[OFFSET(6)]\n            , arr[OFFSET(7)]\n            , arr[OFFSET(8)]\n            , arr[OFFSET(9)]\n            , arr[OFFSET(10)]\n            , arr[OFFSET(11)]\n            , arr[OFFSET(12)]\n            , arr[OFFSET(13)]\n            , arr[OFFSET(14)]\n            , arr[OFFSET(15)]\n            , arr[OFFSET(16)]\n            , arr[OFFSET(17)]\n            , arr[OFFSET(18)]\n            , arr[OFFSET(19)]    \n        ));\n\n\n        CREATE OR REPLACE TABLE `{target_table}` as (\n            SELECT * except(output_0), case when date between \"{train_st}\" and \"{train_end}\" then 'TRAIN'\n                  when date between \"{valid_st}\" and \"{valid_end}\" then 'VALIDATE'\n                 else 'TEST' end as split_col,\n            arr_to_input_20(output_0) as embed\n        FROM ML.PREDICT(MODEL trendspotting.swivel_text_embed,\n        (\n          SELECT date, geo_id, term AS sentences, category_rank, concat( term, geo_id) as series_id\n          FROM `{source_table_uri}` where category_id = {subcat_id} and date > \"{train_st}\"\n        ))      \n        )\n          \"\"\"\n    )\n    .result()\n    )\n\n    return (\n    f'{target_table}',\n    )\n\n"
             ],
             "image": "python:3.9"
           }
@@ -620,7 +693,7 @@
               "sh",
               "-ec",
               "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
-              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef create_top_mover_table(\n    source_table: str,\n    target_table: str,\n    predict_on_dt: str, #uses the last validation date,\n    six_month_dt: str,\n    trained_model: Input[Artifact],\n    top_n_results: int,\n    override: str = 'False',\n    project_id: str = 'cpg-cdp'\n    ) -> NamedTuple('Outputs', [('term_train_table', str)]):\n\n    from google.cloud import bigquery\n\n    source_table_no_bq = source_table.strip('bq://')\n\n    bq_client = bigquery.Client(project=project_id)\n    (\n    bq_client.query(\n      f\"\"\"\n            CREATE OR REPLACE TABLE {target_table} as (\n    select * from\n      (with six_mo_val as (select *, predicted_category_rank.value as six_mo_forecast from `{source_table_no_bq}` \n        where predicted_on_date = '{predict_on_dt}' and date = '{six_month_dt}'),\n         geo_id as (select distinct geo_id, geo_name from `cpg-cdp.trendspotting.futurama_weekly`)\n    SELECT a.date, \n       geo_id.geo_name, \n       a.sentences, \n       cast(a.category_rank as int64) as current_rank, \n       cast(a.category_rank as int64) - b.six_mo_forecast as six_delta_rank,\n       cast(b.category_rank as int64) as six_mo_rank, \n       six_mo_forecast\n      FROM `{source_table_no_bq}` a INNER JOIN \n       six_mo_val b on a.series_id = b.series_id \n       inner join \n       geo_id on cast(a.geo_id as int64) = geo_id.geo_id\n      WHERE a.date = '{predict_on_dt}'\n      ) where current_rank > 500 and six_mo_forecast < 600 order by six_delta_rank desc limit {top_n_results} \n)\n          \"\"\"\n    )\n    .result()\n    )\n\n    return (\n    f'{target_table}',\n    )\n\n"
+              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef create_top_mover_table(\n    source_table: str,\n    target_table: str,\n    predict_on_dt: str, #uses the last validation date,\n    six_month_dt: str,\n    trained_model: Input[Artifact],\n    top_n_results: int,\n    override: str = 'False',\n    project_id: str = 'cpg-cdp'\n    ) -> NamedTuple('Outputs', [('term_train_table', str)]):\n\n    from google.cloud import bigquery\n\n    source_table_no_bq = source_table.strip('bq://')\n\n    bq_client = bigquery.Client(project=project_id)\n    (\n    bq_client.query(\n      f\"\"\"\n            CREATE OR REPLACE TABLE {target_table} as (\n    select * from\n      (with six_mo_val as (select *, predicted_category_rank.value as six_mo_forecast from `{source_table_no_bq}` \n        where predicted_on_date = '{predict_on_dt}' and date = '{six_month_dt}'),\n         geo_id as (select distinct geo_id, geo_name from `cpg-cdp.trendspotting.futurama_weekly`)\n    SELECT a.date, \n       geo_id.geo_name, \n       a.sentences, \n       cast(a.category_rank as int64) as current_rank, \n       cast(a.category_rank as int64) - b.six_mo_forecast as six_delta_rank,\n       cast(b.category_rank as int64) as six_mo_rank, \n       six_mo_forecast\n      FROM `{source_table_no_bq}` a INNER JOIN \n       six_mo_val b on a.series_id = b.series_id \n       inner join \n       geo_id on cast(a.geo_id as int64) = geo_id.geo_id\n      WHERE a.date = '{predict_on_dt}'\n      ) where current_rank > 500 and six_mo_forecast < 1000 order by six_delta_rank desc limit {top_n_results} \n)\n          \"\"\"\n    )\n    .result()\n    )\n\n    return (\n    f'{target_table}',\n    )\n\n"
             ],
             "image": "python:3.9"
           }
@@ -640,7 +713,7 @@
               "sh",
               "-ec",
               "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
-              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef nlp_featurize_and_cluster(\n    source_table: str,\n    target_table: str,\n    train_st: str,\n    train_end: str,\n    subcat_id: int,\n    override: str = 'False',\n    project_id: str = 'cpg-cdp'\n    ) -> NamedTuple('Outputs', [('term_cluster_table', str)]):\n\n    from google.cloud import bigquery\n\n    bq_client = bigquery.Client(project=project_id)\n    (\n    bq_client.query(\n      f\"\"\"\n            CREATE TEMPORARY FUNCTION arr_to_input_20(arr ARRAY<FLOAT64>)\n            RETURNS \n            STRUCT<p1 FLOAT64, p2 FLOAT64, p3 FLOAT64, p4 FLOAT64,\n                   p5 FLOAT64, p6 FLOAT64, p7 FLOAT64, p8 FLOAT64, \n                   p9 FLOAT64, p10 FLOAT64, p11 FLOAT64, p12 FLOAT64, \n                   p13 FLOAT64, p14 FLOAT64, p15 FLOAT64, p16 FLOAT64,\n                   p17 FLOAT64, p18 FLOAT64, p19 FLOAT64, p20 FLOAT64>\n            AS (\n            STRUCT(\n                arr[OFFSET(0)]\n                , arr[OFFSET(1)]\n                , arr[OFFSET(2)]\n                , arr[OFFSET(3)]\n                , arr[OFFSET(4)]\n                , arr[OFFSET(5)]\n                , arr[OFFSET(6)]\n                , arr[OFFSET(7)]\n                , arr[OFFSET(8)]\n                , arr[OFFSET(9)]\n                , arr[OFFSET(10)]\n                , arr[OFFSET(11)]\n                , arr[OFFSET(12)]\n                , arr[OFFSET(13)]\n                , arr[OFFSET(14)]\n                , arr[OFFSET(15)]\n                , arr[OFFSET(16)]\n                , arr[OFFSET(17)]\n                , arr[OFFSET(18)]\n                , arr[OFFSET(19)]    \n            ));\n\n            CREATE OR REPLACE TABLE {target_table} as ( #\n                select * \n                from ML.PREDICT(MODEL trendspotting.embed_clustering_100, (\n                    select *, arr_to_input_20(output_0) AS comments_embed from \n                        ML.PREDICT(MODEL trendspotting.swivel_text_embed,(\n                      SELECT date, geo_name, term AS sentences, volume\n                      FROM `{source_table}`\n                      WHERE date >= '{train_st}'\n                      and category_id = {subcat_id}\n                    ))\n                    )\n                )\n            )\n          \"\"\"\n    )\n    .result()\n    )\n\n    return (\n    f'{target_table}',\n    )\n\n"
+              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef nlp_featurize_and_cluster(\n    source_table: str,\n    target_table: str,\n    train_st: str,\n    train_end: str,\n    subcat_id: int,\n    model_name: str,\n    override: str = 'False',\n    project_id: str = 'cpg-cdp'\n    ) -> NamedTuple('Outputs', [('term_cluster_table', str)]):\n\n    from google.cloud import bigquery\n\n    bq_client = bigquery.Client(project=project_id)\n    (\n    bq_client.query(\n      f\"\"\"\n            CREATE TEMPORARY FUNCTION arr_to_input_20(arr ARRAY<FLOAT64>)\n            RETURNS \n            STRUCT<p1 FLOAT64, p2 FLOAT64, p3 FLOAT64, p4 FLOAT64,\n                   p5 FLOAT64, p6 FLOAT64, p7 FLOAT64, p8 FLOAT64, \n                   p9 FLOAT64, p10 FLOAT64, p11 FLOAT64, p12 FLOAT64, \n                   p13 FLOAT64, p14 FLOAT64, p15 FLOAT64, p16 FLOAT64,\n                   p17 FLOAT64, p18 FLOAT64, p19 FLOAT64, p20 FLOAT64>\n            AS (\n            STRUCT(\n                arr[OFFSET(0)]\n                , arr[OFFSET(1)]\n                , arr[OFFSET(2)]\n                , arr[OFFSET(3)]\n                , arr[OFFSET(4)]\n                , arr[OFFSET(5)]\n                , arr[OFFSET(6)]\n                , arr[OFFSET(7)]\n                , arr[OFFSET(8)]\n                , arr[OFFSET(9)]\n                , arr[OFFSET(10)]\n                , arr[OFFSET(11)]\n                , arr[OFFSET(12)]\n                , arr[OFFSET(13)]\n                , arr[OFFSET(14)]\n                , arr[OFFSET(15)]\n                , arr[OFFSET(16)]\n                , arr[OFFSET(17)]\n                , arr[OFFSET(18)]\n                , arr[OFFSET(19)]    \n            ));\n\n            CREATE OR REPLACE TABLE `{target_table}` as ( #\n                select * \n                from ML.PREDICT(MODEL `{model_name}`, (\n                    select *, arr_to_input_20(output_0) AS comments_embed from \n                        ML.PREDICT(MODEL trendspotting.swivel_text_embed,(\n                      SELECT date, geo_name, term AS sentences, volume\n                      FROM `{source_table}`\n                      WHERE date >= '{train_st}'\n                      and category_id = {subcat_id}\n                    ))\n                    )\n                )\n            )\n          \"\"\"\n    )\n    .result()\n    )\n\n    return (\n    f'{target_table}',\n    )\n\n"
             ],
             "image": "python:3.9"
           }
@@ -728,7 +801,7 @@
       }
     },
     "pipelineInfo": {
-      "name": "v1-beauty-trendspotting-pipeline-v1"
+      "name": "v2-png-hair-22-trendspotting-pipeline-v2"
     },
     "root": {
       "dag": {
@@ -745,6 +818,9 @@
             ],
             "inputs": {
               "parameters": {
+                "model_name": {
+                  "componentInputParameter": "model_name"
+                },
                 "override": {
                   "runtimeValue": {
                     "constantValue": {
@@ -1098,6 +1174,78 @@
               "name": "automl-forecasting-training-job-2"
             }
           },
+          "bigquery-create-model-job": {
+            "cachingOptions": {
+              "enableCache": true
+            },
+            "componentRef": {
+              "name": "comp-bigquery-create-model-job"
+            },
+            "inputs": {
+              "parameters": {
+                "job_configuration_query": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": "{}"
+                    }
+                  }
+                },
+                "labels": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": "{}"
+                    }
+                  }
+                },
+                "location": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": "US"
+                    }
+                  }
+                },
+                "pipelineparam--model_name": {
+                  "componentInputParameter": "model_name"
+                },
+                "pipelineparam--n_clusters": {
+                  "componentInputParameter": "n_clusters"
+                },
+                "pipelineparam--source_table": {
+                  "componentInputParameter": "source_table"
+                },
+                "pipelineparam--subcat_id": {
+                  "componentInputParameter": "subcat_id"
+                },
+                "pipelineparam--train_st": {
+                  "componentInputParameter": "train_st"
+                },
+                "project": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": "cpg-cdp"
+                    }
+                  }
+                },
+                "query": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": "CREATE TEMPORARY FUNCTION arr_to_input_20(arr ARRAY<FLOAT64>)\n                        RETURNS \n                        STRUCT<p1 FLOAT64, p2 FLOAT64, p3 FLOAT64, p4 FLOAT64,\n                               p5 FLOAT64, p6 FLOAT64, p7 FLOAT64, p8 FLOAT64, \n                               p9 FLOAT64, p10 FLOAT64, p11 FLOAT64, p12 FLOAT64, \n                               p13 FLOAT64, p14 FLOAT64, p15 FLOAT64, p16 FLOAT64,\n                               p17 FLOAT64, p18 FLOAT64, p19 FLOAT64, p20 FLOAT64>\n                        AS (\n                        STRUCT(\n                            arr[OFFSET(0)]\n                            , arr[OFFSET(1)]\n                            , arr[OFFSET(2)]\n                            , arr[OFFSET(3)]\n                            , arr[OFFSET(4)]\n                            , arr[OFFSET(5)]\n                            , arr[OFFSET(6)]\n                            , arr[OFFSET(7)]\n                            , arr[OFFSET(8)]\n                            , arr[OFFSET(9)]\n                            , arr[OFFSET(10)]\n                            , arr[OFFSET(11)]\n                            , arr[OFFSET(12)]\n                            , arr[OFFSET(13)]\n                            , arr[OFFSET(14)]\n                            , arr[OFFSET(15)]\n                            , arr[OFFSET(16)]\n                            , arr[OFFSET(17)]\n                            , arr[OFFSET(18)]\n                            , arr[OFFSET(19)]    \n                        ));\n                        \n            CREATE OR REPLACE MODEL `{{$.inputs.parameters['pipelineparam--model_name']}}` OPTIONS(model_type='kmeans', KMEANS_INIT_METHOD='KMEANS++', num_clusters={{$.inputs.parameters['pipelineparam--n_clusters']}}) AS\n                    select arr_to_input_20(output_0) AS comments_embed from \n                        ML.PREDICT(MODEL trendspotting.swivel_text_embed,(\n                      SELECT date, geo_name, term AS sentences, volume\n                      FROM `{{$.inputs.parameters['pipelineparam--source_table']}}`\n                      WHERE date >= '{{$.inputs.parameters['pipelineparam--train_st']}}'\n                      and category_id = {{$.inputs.parameters['pipelineparam--subcat_id']}}\n                      ))\n    "
+                    }
+                  }
+                },
+                "query_parameters": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": "[]"
+                    }
+                  }
+                }
+              }
+            },
+            "taskInfo": {
+              "name": "bigquery-create-model-job"
+            }
+          },
           "create-prediction-dataset-term-level": {
             "cachingOptions": {
               "enableCache": true
@@ -1130,7 +1278,7 @@
                 "target_table": {
                   "runtimeValue": {
                     "constantValue": {
-                      "stringValue": "cpg-cdp.trendspotting.futurama_weekly_embed"
+                      "stringValue": "cpg-cdp.trendspotting.ETL_futurama_weekly_embed_png_hair_22"
                     }
                   }
                 },
@@ -1214,8 +1362,14 @@
             "componentRef": {
               "name": "comp-nlp-featurize-and-cluster"
             },
+            "dependentTasks": [
+              "bigquery-create-model-job"
+            ],
             "inputs": {
               "parameters": {
+                "model_name": {
+                  "componentInputParameter": "model_name"
+                },
                 "override": {
                   "runtimeValue": {
                     "constantValue": {
@@ -1286,7 +1440,7 @@
                 "target_table": {
                   "runtimeValue": {
                     "constantValue": {
-                      "stringValue": "cpg-cdp.trendspotting.futurama_weekly_embed_aml_pl"
+                      "stringValue": "cpg-cdp.trendspotting.ETL_futurama_weekly_embed_aml_pl_png_hair_22"
                     }
                   }
                 }
@@ -1408,6 +1562,9 @@
             "type": "STRING"
           },
           "location": {
+            "type": "STRING"
+          },
+          "model_name": {
             "type": "STRING"
           },
           "n_clusters": {
