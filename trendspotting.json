@@ -5,6 +5,9 @@
         "executorLabel": "exec-aggregate-clusters",
         "inputDefinitions": {
           "parameters": {
+            "category_table": {
+              "type": "STRING"
+            },
             "model_name": {
               "type": "STRING"
             },
@@ -37,6 +40,41 @@
         "outputDefinitions": {
           "parameters": {
             "term_cluster_agg_table": {
+              "type": "STRING"
+            }
+          }
+        }
+      },
+      "comp-auto-cluster": {
+        "executorLabel": "exec-auto-cluster",
+        "inputDefinitions": {
+          "parameters": {
+            "classified_terms_table": {
+              "type": "STRING"
+            },
+            "cluster_max": {
+              "type": "INT"
+            },
+            "cluster_min": {
+              "type": "INT"
+            },
+            "cluster_train_table": {
+              "type": "STRING"
+            },
+            "labels": {
+              "type": "STRING"
+            },
+            "project_id": {
+              "type": "STRING"
+            },
+            "target_table": {
+              "type": "STRING"
+            }
+          }
+        },
+        "outputDefinitions": {
+          "parameters": {
+            "target_table": {
               "type": "STRING"
             }
           }
@@ -264,6 +302,583 @@
           }
         }
       },
+      "comp-condition-1": {
+        "dag": {
+          "tasks": {
+            "aggregate-clusters": {
+              "cachingOptions": {
+                "enableCache": true
+              },
+              "componentRef": {
+                "name": "comp-aggregate-clusters"
+              },
+              "dependentTasks": [
+                "auto-cluster"
+              ],
+              "inputs": {
+                "parameters": {
+                  "category_table": {
+                    "taskOutputParameter": {
+                      "outputParameterKey": "target_table",
+                      "producerTask": "auto-cluster"
+                    }
+                  },
+                  "model_name": {
+                    "componentInputParameter": "pipelineparam--model_name"
+                  },
+                  "override": {
+                    "runtimeValue": {
+                      "constantValue": {
+                        "stringValue": "False"
+                      }
+                    }
+                  },
+                  "project_id": {
+                    "runtimeValue": {
+                      "constantValue": {
+                        "stringValue": "cpg-cdp"
+                      }
+                    }
+                  },
+                  "source_table": {
+                    "componentInputParameter": "pipelineparam--cluster_table"
+                  },
+                  "target_table": {
+                    "componentInputParameter": "pipelineparam--cluster_table_agg"
+                  },
+                  "train_end": {
+                    "componentInputParameter": "pipelineparam--train_end"
+                  },
+                  "train_st": {
+                    "componentInputParameter": "pipelineparam--train_st"
+                  },
+                  "valid_end": {
+                    "componentInputParameter": "pipelineparam--valid_end"
+                  },
+                  "valid_st": {
+                    "componentInputParameter": "pipelineparam--valid_st"
+                  }
+                }
+              },
+              "taskInfo": {
+                "name": "aggregate-clusters"
+              }
+            },
+            "auto-cluster": {
+              "cachingOptions": {
+                "enableCache": true
+              },
+              "componentRef": {
+                "name": "comp-auto-cluster"
+              },
+              "dependentTasks": [
+                "train-classification-model"
+              ],
+              "inputs": {
+                "parameters": {
+                  "classified_terms_table": {
+                    "taskOutputParameter": {
+                      "outputParameterKey": "Output",
+                      "producerTask": "train-classification-model"
+                    }
+                  },
+                  "cluster_max": {
+                    "componentInputParameter": "pipelineparam--auto_min_cluster"
+                  },
+                  "cluster_min": {
+                    "componentInputParameter": "pipelineparam--auto_max_cluster"
+                  },
+                  "cluster_train_table": {
+                    "componentInputParameter": "pipelineparam--auto_cluster_train_table"
+                  },
+                  "labels": {
+                    "componentInputParameter": "pipelineparam--label_list"
+                  },
+                  "project_id": {
+                    "componentInputParameter": "pipelineparam--vertex_project"
+                  },
+                  "target_table": {
+                    "componentInputParameter": "pipelineparam--auto_cluster_target_table"
+                  }
+                }
+              },
+              "taskInfo": {
+                "name": "auto-cluster"
+              }
+            },
+            "automl-forecasting-training-job-2": {
+              "cachingOptions": {
+                "enableCache": true
+              },
+              "componentRef": {
+                "name": "comp-automl-forecasting-training-job-2"
+              },
+              "dependentTasks": [
+                "time-series-dataset-create-2"
+              ],
+              "inputs": {
+                "artifacts": {
+                  "dataset": {
+                    "taskOutputArtifact": {
+                      "outputArtifactKey": "dataset",
+                      "producerTask": "time-series-dataset-create-2"
+                    }
+                  }
+                },
+                "parameters": {
+                  "available_at_forecast_columns": {
+                    "runtimeValue": {
+                      "constantValue": {
+                        "stringValue": "[\"date\"]"
+                      }
+                    }
+                  },
+                  "budget_milli_node_hours": {
+                    "componentInputParameter": "pipelineparam--budget_milli_node_hours_cluster"
+                  },
+                  "column_transformations": {
+                    "runtimeValue": {
+                      "constantValue": {
+                        "stringValue": "[{\"numeric\": {\"columnName\": \"volume\"}}, {\"timestamp\": {\"columnName\": \"date\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p1\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p2\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p3\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p4\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p5\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p6\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p7\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p8\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p9\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p10\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p11\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p12\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p13\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p14\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p15\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p16\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p17\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p18\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p19\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p20\"}}]"
+                      }
+                    }
+                  },
+                  "context_window": {
+                    "componentInputParameter": "pipelineparam--context_window"
+                  },
+                  "data_granularity_count": {
+                    "runtimeValue": {
+                      "constantValue": {
+                        "intValue": "1"
+                      }
+                    }
+                  },
+                  "data_granularity_unit": {
+                    "runtimeValue": {
+                      "constantValue": {
+                        "stringValue": "week"
+                      }
+                    }
+                  },
+                  "display_name": {
+                    "runtimeValue": {
+                      "constantValue": {
+                        "stringValue": "train-cluster-forecast-futurama"
+                      }
+                    }
+                  },
+                  "export_evaluated_data_items": {
+                    "runtimeValue": {
+                      "constantValue": {
+                        "intValue": "1"
+                      }
+                    }
+                  },
+                  "export_evaluated_data_items_bigquery_destination_uri": {
+                    "componentInputParameter": "pipelineparam--target_cluster_forecast_table"
+                  },
+                  "export_evaluated_data_items_override_destination": {
+                    "runtimeValue": {
+                      "constantValue": {
+                        "intValue": "1"
+                      }
+                    }
+                  },
+                  "forecast_horizon": {
+                    "componentInputParameter": "pipelineparam--forecast_horizon"
+                  },
+                  "labels": {
+                    "runtimeValue": {
+                      "constantValue": {
+                        "stringValue": "{}"
+                      }
+                    }
+                  },
+                  "location": {
+                    "componentInputParameter": "pipelineparam--location"
+                  },
+                  "model_display_name": {
+                    "runtimeValue": {
+                      "constantValue": {
+                        "stringValue": "cluster-forecast-futurama"
+                      }
+                    }
+                  },
+                  "optimization_objective": {
+                    "runtimeValue": {
+                      "constantValue": {
+                        "stringValue": "minimize-rmse"
+                      }
+                    }
+                  },
+                  "predefined_split_column_name": {
+                    "runtimeValue": {
+                      "constantValue": {
+                        "stringValue": "split_col"
+                      }
+                    }
+                  },
+                  "project": {
+                    "componentInputParameter": "pipelineparam--vertex_project"
+                  },
+                  "target_column": {
+                    "runtimeValue": {
+                      "constantValue": {
+                        "stringValue": "volume"
+                      }
+                    }
+                  },
+                  "time_column": {
+                    "runtimeValue": {
+                      "constantValue": {
+                        "stringValue": "date"
+                      }
+                    }
+                  },
+                  "time_series_attribute_columns": {
+                    "runtimeValue": {
+                      "constantValue": {
+                        "stringValue": "[\"topic_id\", \"category\", \"comments_embed_p1\", \"comments_embed_p2\", \"comments_embed_p3\", \"comments_embed_p4\", \"comments_embed_p5\", \"comments_embed_p6\", \"comments_embed_p7\", \"comments_embed_p8\", \"comments_embed_p9\", \"comments_embed_p10\", \"comments_embed_p11\", \"comments_embed_p12\", \"comments_embed_p13\", \"comments_embed_p14\", \"comments_embed_p15\", \"comments_embed_p16\", \"comments_embed_p17\", \"comments_embed_p18\", \"comments_embed_p19\", \"comments_embed_p20\"]"
+                      }
+                    }
+                  },
+                  "time_series_identifier_column": {
+                    "runtimeValue": {
+                      "constantValue": {
+                        "stringValue": "series_id"
+                      }
+                    }
+                  },
+                  "unavailable_at_forecast_columns": {
+                    "runtimeValue": {
+                      "constantValue": {
+                        "stringValue": "[\"volume\"]"
+                      }
+                    }
+                  }
+                }
+              },
+              "taskInfo": {
+                "name": "automl-forecasting-training-job-2"
+              }
+            },
+            "time-series-dataset-create-2": {
+              "cachingOptions": {
+                "enableCache": true
+              },
+              "componentRef": {
+                "name": "comp-time-series-dataset-create-2"
+              },
+              "dependentTasks": [
+                "aggregate-clusters"
+              ],
+              "inputs": {
+                "parameters": {
+                  "bq_source": {
+                    "taskOutputParameter": {
+                      "outputParameterKey": "term_cluster_agg_table",
+                      "producerTask": "aggregate-clusters"
+                    }
+                  },
+                  "display_name": {
+                    "componentInputParameter": "pipelineparam--ds_display_name_cluster"
+                  },
+                  "labels": {
+                    "runtimeValue": {
+                      "constantValue": {
+                        "stringValue": "{}"
+                      }
+                    }
+                  },
+                  "location": {
+                    "componentInputParameter": "pipelineparam--location"
+                  },
+                  "project": {
+                    "componentInputParameter": "pipelineparam--vertex_project"
+                  }
+                }
+              },
+              "taskInfo": {
+                "name": "time-series-dataset-create-2"
+              }
+            },
+            "train-classification-model": {
+              "cachingOptions": {
+                "enableCache": true
+              },
+              "componentRef": {
+                "name": "comp-train-classification-model"
+              },
+              "inputs": {
+                "parameters": {
+                  "classification_budget_hours": {
+                    "componentInputParameter": "pipelineparam--classification_model_budget"
+                  },
+                  "classification_model_name": {
+                    "componentInputParameter": "pipelineparam--classification_model_name"
+                  },
+                  "label_table": {
+                    "componentInputParameter": "pipelineparam--label_table"
+                  },
+                  "project_id": {
+                    "componentInputParameter": "pipelineparam--vertex_project"
+                  },
+                  "source_table": {
+                    "componentInputParameter": "pipelineparam--prep-forecast-term-level-term_train_table"
+                  },
+                  "target_table": {
+                    "componentInputParameter": "pipelineparam--scored_classification_table"
+                  },
+                  "train_table": {
+                    "componentInputParameter": "pipelineparam--classification_train_table"
+                  }
+                }
+              },
+              "taskInfo": {
+                "name": "train-classification-model"
+              }
+            }
+          }
+        },
+        "inputDefinitions": {
+          "parameters": {
+            "pipelineparam--auto_cluster_target_table": {
+              "type": "STRING"
+            },
+            "pipelineparam--auto_cluster_train_table": {
+              "type": "STRING"
+            },
+            "pipelineparam--auto_max_cluster": {
+              "type": "INT"
+            },
+            "pipelineparam--auto_min_cluster": {
+              "type": "INT"
+            },
+            "pipelineparam--budget_milli_node_hours_cluster": {
+              "type": "INT"
+            },
+            "pipelineparam--classification_model_budget": {
+              "type": "INT"
+            },
+            "pipelineparam--classification_model_name": {
+              "type": "STRING"
+            },
+            "pipelineparam--classification_train_table": {
+              "type": "STRING"
+            },
+            "pipelineparam--cluster_table": {
+              "type": "STRING"
+            },
+            "pipelineparam--cluster_table_agg": {
+              "type": "STRING"
+            },
+            "pipelineparam--context_window": {
+              "type": "INT"
+            },
+            "pipelineparam--ds_display_name_cluster": {
+              "type": "STRING"
+            },
+            "pipelineparam--forecast_horizon": {
+              "type": "INT"
+            },
+            "pipelineparam--if-tbl-exists-Output": {
+              "type": "STRING"
+            },
+            "pipelineparam--label_list": {
+              "type": "STRING"
+            },
+            "pipelineparam--label_table": {
+              "type": "STRING"
+            },
+            "pipelineparam--location": {
+              "type": "STRING"
+            },
+            "pipelineparam--model_name": {
+              "type": "STRING"
+            },
+            "pipelineparam--prep-forecast-term-level-term_train_table": {
+              "type": "STRING"
+            },
+            "pipelineparam--scored_classification_table": {
+              "type": "STRING"
+            },
+            "pipelineparam--target_cluster_forecast_table": {
+              "type": "STRING"
+            },
+            "pipelineparam--train_end": {
+              "type": "STRING"
+            },
+            "pipelineparam--train_st": {
+              "type": "STRING"
+            },
+            "pipelineparam--valid_end": {
+              "type": "STRING"
+            },
+            "pipelineparam--valid_st": {
+              "type": "STRING"
+            },
+            "pipelineparam--vertex_project": {
+              "type": "STRING"
+            }
+          }
+        }
+      },
+      "comp-condition-2": {
+        "dag": {
+          "tasks": {
+            "bigquery-create-model-job": {
+              "cachingOptions": {
+                "enableCache": true
+              },
+              "componentRef": {
+                "name": "comp-bigquery-create-model-job"
+              },
+              "inputs": {
+                "parameters": {
+                  "job_configuration_query": {
+                    "runtimeValue": {
+                      "constantValue": {
+                        "stringValue": "{}"
+                      }
+                    }
+                  },
+                  "labels": {
+                    "runtimeValue": {
+                      "constantValue": {
+                        "stringValue": "{}"
+                      }
+                    }
+                  },
+                  "location": {
+                    "runtimeValue": {
+                      "constantValue": {
+                        "stringValue": "US"
+                      }
+                    }
+                  },
+                  "pipelineparam--model_name": {
+                    "componentInputParameter": "pipelineparam--model_name"
+                  },
+                  "pipelineparam--n_clusters": {
+                    "componentInputParameter": "pipelineparam--n_clusters"
+                  },
+                  "pipelineparam--source_table": {
+                    "componentInputParameter": "pipelineparam--source_table"
+                  },
+                  "pipelineparam--subcat_id": {
+                    "componentInputParameter": "pipelineparam--subcat_id"
+                  },
+                  "pipelineparam--train_st": {
+                    "componentInputParameter": "pipelineparam--train_st"
+                  },
+                  "project": {
+                    "runtimeValue": {
+                      "constantValue": {
+                        "stringValue": "cpg-cdp"
+                      }
+                    }
+                  },
+                  "query": {
+                    "runtimeValue": {
+                      "constantValue": {
+                        "stringValue": "CREATE TEMPORARY FUNCTION arr_to_input_20(arr ARRAY<FLOAT64>)\n                        RETURNS \n                        STRUCT<p1 FLOAT64, p2 FLOAT64, p3 FLOAT64, p4 FLOAT64,\n                               p5 FLOAT64, p6 FLOAT64, p7 FLOAT64, p8 FLOAT64, \n                               p9 FLOAT64, p10 FLOAT64, p11 FLOAT64, p12 FLOAT64, \n                               p13 FLOAT64, p14 FLOAT64, p15 FLOAT64, p16 FLOAT64,\n                               p17 FLOAT64, p18 FLOAT64, p19 FLOAT64, p20 FLOAT64>\n                        AS (\n                        STRUCT(\n                            arr[OFFSET(0)]\n                            , arr[OFFSET(1)]\n                            , arr[OFFSET(2)]\n                            , arr[OFFSET(3)]\n                            , arr[OFFSET(4)]\n                            , arr[OFFSET(5)]\n                            , arr[OFFSET(6)]\n                            , arr[OFFSET(7)]\n                            , arr[OFFSET(8)]\n                            , arr[OFFSET(9)]\n                            , arr[OFFSET(10)]\n                            , arr[OFFSET(11)]\n                            , arr[OFFSET(12)]\n                            , arr[OFFSET(13)]\n                            , arr[OFFSET(14)]\n                            , arr[OFFSET(15)]\n                            , arr[OFFSET(16)]\n                            , arr[OFFSET(17)]\n                            , arr[OFFSET(18)]\n                            , arr[OFFSET(19)]    \n                        ));\n                        \n            CREATE OR REPLACE MODEL `{{$.inputs.parameters['pipelineparam--model_name']}}` OPTIONS(model_type='kmeans', KMEANS_INIT_METHOD='KMEANS++', num_clusters={{$.inputs.parameters['pipelineparam--n_clusters']}}) AS\n                    select arr_to_input_20(output_0) AS comments_embed from \n                        ML.PREDICT(MODEL trendspotting.swivel_text_embed,(\n                      SELECT date, geo_name, term AS sentences, volume\n                      FROM `{{$.inputs.parameters['pipelineparam--source_table']}}`\n                      WHERE date >= '{{$.inputs.parameters['pipelineparam--train_st']}}'\n                      and category_id = {{$.inputs.parameters['pipelineparam--subcat_id']}}\n                      ))\n    "
+                      }
+                    }
+                  },
+                  "query_parameters": {
+                    "runtimeValue": {
+                      "constantValue": {
+                        "stringValue": "[]"
+                      }
+                    }
+                  }
+                }
+              },
+              "taskInfo": {
+                "name": "bigquery-create-model-job"
+              }
+            },
+            "nlp-featurize-and-cluster": {
+              "cachingOptions": {
+                "enableCache": true
+              },
+              "componentRef": {
+                "name": "comp-nlp-featurize-and-cluster"
+              },
+              "dependentTasks": [
+                "bigquery-create-model-job"
+              ],
+              "inputs": {
+                "parameters": {
+                  "model_name": {
+                    "componentInputParameter": "pipelineparam--model_name"
+                  },
+                  "override": {
+                    "runtimeValue": {
+                      "constantValue": {
+                        "stringValue": "False"
+                      }
+                    }
+                  },
+                  "project_id": {
+                    "runtimeValue": {
+                      "constantValue": {
+                        "stringValue": "cpg-cdp"
+                      }
+                    }
+                  },
+                  "source_table": {
+                    "componentInputParameter": "pipelineparam--source_table"
+                  },
+                  "subcat_id": {
+                    "componentInputParameter": "pipelineparam--subcat_id"
+                  },
+                  "target_table": {
+                    "componentInputParameter": "pipelineparam--cluster_table"
+                  },
+                  "train_end": {
+                    "componentInputParameter": "pipelineparam--train_end"
+                  },
+                  "train_st": {
+                    "componentInputParameter": "pipelineparam--train_st"
+                  }
+                }
+              },
+              "taskInfo": {
+                "name": "nlp-featurize-and-cluster"
+              }
+            }
+          }
+        },
+        "inputDefinitions": {
+          "parameters": {
+            "pipelineparam--cluster_table": {
+              "type": "STRING"
+            },
+            "pipelineparam--if-tbl-exists-Output": {
+              "type": "STRING"
+            },
+            "pipelineparam--model_name": {
+              "type": "STRING"
+            },
+            "pipelineparam--n_clusters": {
+              "type": "INT"
+            },
+            "pipelineparam--source_table": {
+              "type": "STRING"
+            },
+            "pipelineparam--subcat_id": {
+              "type": "INT"
+            },
+            "pipelineparam--train_end": {
+              "type": "STRING"
+            },
+            "pipelineparam--train_st": {
+              "type": "STRING"
+            }
+          }
+        }
+      },
       "comp-create-prediction-dataset-term-level": {
         "executorLabel": "exec-create-prediction-dataset-term-level",
         "inputDefinitions": {
@@ -343,6 +958,26 @@
         "outputDefinitions": {
           "parameters": {
             "term_train_table": {
+              "type": "STRING"
+            }
+          }
+        }
+      },
+      "comp-if-tbl-exists": {
+        "executorLabel": "exec-if-tbl-exists",
+        "inputDefinitions": {
+          "parameters": {
+            "project_id": {
+              "type": "STRING"
+            },
+            "table_ref": {
+              "type": "STRING"
+            }
+          }
+        },
+        "outputDefinitions": {
+          "parameters": {
+            "Output": {
               "type": "STRING"
             }
           }
@@ -475,6 +1110,41 @@
             }
           }
         }
+      },
+      "comp-train-classification-model": {
+        "executorLabel": "exec-train-classification-model",
+        "inputDefinitions": {
+          "parameters": {
+            "classification_budget_hours": {
+              "type": "INT"
+            },
+            "classification_model_name": {
+              "type": "STRING"
+            },
+            "label_table": {
+              "type": "STRING"
+            },
+            "project_id": {
+              "type": "STRING"
+            },
+            "source_table": {
+              "type": "STRING"
+            },
+            "target_table": {
+              "type": "STRING"
+            },
+            "train_table": {
+              "type": "STRING"
+            }
+          }
+        },
+        "outputDefinitions": {
+          "parameters": {
+            "Output": {
+              "type": "STRING"
+            }
+          }
+        }
       }
     },
     "deploymentSpec": {
@@ -494,7 +1164,27 @@
               "sh",
               "-ec",
               "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
-              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef aggregate_clusters(\n    source_table: str,\n    target_table: str,\n    train_st: str,\n    train_end: str,\n    valid_st: str,\n    valid_end: str,\n    model_name: str,\n    override: str = 'False',\n    project_id: str = 'cpg-cdp'\n    ) -> NamedTuple('Outputs', [('term_cluster_agg_table', str)]):\n\n    from google.cloud import bigquery\n\n    source_table_no_bq = source_table.strip('bq://')\n\n    target_bq_table = 'bq://' + target_table\n\n    bq_client = bigquery.Client(project=project_id)\n    (\n    bq_client.query(\n      f\"\"\"\n            CREATE OR REPLACE TABLE `{target_table}` as (\n            with centroids as (select * from \n            (SELECT\n            centroid_id, feature, numerical_value\n            FROM\n              ML.CENTROIDS(MODEL `{model_name}`)\n            )\n            PIVOT(avg(numerical_value) for feature in ('comments_embed_p1',\n            'comments_embed_p2',\n            'comments_embed_p3',\n            'comments_embed_p4',\n            'comments_embed_p5',\n            'comments_embed_p6',\n            'comments_embed_p7',\n            'comments_embed_p8',\n            'comments_embed_p9',\n            'comments_embed_p10',\n            'comments_embed_p11',\n            'comments_embed_p12',\n            'comments_embed_p13',\n            'comments_embed_p14',\n            'comments_embed_p15',\n            'comments_embed_p16',\n            'comments_embed_p17',\n            'comments_embed_p18',\n            'comments_embed_p19',\n            'comments_embed_p20'))\n                              )\n            select volume, date, b.*,\n            case when date between '{train_st}' and  '{train_end}' then 'TRAIN'\n                      when date between '{valid_st}' and '{valid_end}' then 'VALIDATE'\n                     else 'TEST' end as split_col\n            from (\n                select sum(volume) as volume, date, centroid_id \n                from {source_table} group by date, centroid_id\n            ) a\n            inner join centroids b on a.centroid_id = b.centroid_id\n            )\n          \"\"\"\n    )\n    .result()\n    )\n\n    return (\n    f'{target_bq_table}',\n    )\n\n"
+              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef aggregate_clusters(\n    source_table: str,\n    target_table: str,\n    category_table: str,\n    train_st: str,\n    train_end: str,\n    valid_st: str,\n    valid_end: str,\n    model_name: str,\n    override: str = 'False',\n    project_id: str = 'cpg-cdp'\n    ) -> NamedTuple('Outputs', [('term_cluster_agg_table', str)]):\n\n    from google.cloud import bigquery\n\n    source_table_no_bq = source_table.strip('bq://')\n\n    target_bq_table = 'bq://' + target_table\n\n    bq_client = bigquery.Client(project=project_id)\n\n\n    bq_client.query(\n      f\"\"\"\n       CREATE OR REPLACE TABLE `{target_table}` as (\n        WITH\n          scored_trends AS (\n          SELECT\n            centroid_id AS topic_id,\n            terms,\n            category\n          FROM\n            {category_table} )\n        SELECT\n          SUM(volume) as volume,\n          date,\n          topic_id,\n          category,\n          CONCAT(category, topic_id) as series_id,\n          AVG(comments_embed.p1) AS comments_embed_p1,\n          AVG(comments_embed.p2) AS comments_embed_p2,\n          AVG(comments_embed.p3) AS comments_embed_p3,\n          AVG(comments_embed.p4) AS comments_embed_p4,\n          AVG(comments_embed.p5) AS comments_embed_p5,\n          AVG(comments_embed.p6) AS comments_embed_p6,\n          AVG(comments_embed.p7) AS comments_embed_p7,\n          AVG(comments_embed.p8) AS comments_embed_p8,\n          AVG(comments_embed.p9) AS comments_embed_p9,\n          AVG(comments_embed.p10) AS comments_embed_p10,\n          AVG(comments_embed.p11) AS comments_embed_p11,\n          AVG(comments_embed.p12) AS comments_embed_p12,\n          AVG(comments_embed.p13) AS comments_embed_p13,\n          AVG(comments_embed.p14) AS comments_embed_p14,\n          AVG(comments_embed.p15) AS comments_embed_p15,\n          AVG(comments_embed.p16) AS comments_embed_p16,\n          AVG(comments_embed.p17) AS comments_embed_p17,\n          AVG(comments_embed.p18) AS comments_embed_p18,\n          AVG(comments_embed.p19) AS comments_embed_p19,\n          AVG(comments_embed.p20) AS comments_embed_p20,\n          case when date between '{train_st}' and  '{train_end}' then 'TRAIN'\n                              when date between '{valid_st}' and '{valid_end}' then 'VALIDATE'\n                             else 'TEST' end as split_col\n        FROM (\n          SELECT\n            volume,\n            a.date,\n            centroid_id,\n            topic_id,\n            category,\n            a.comments_embed\n          FROM\n            {source_table} a\n          INNER JOIN\n            scored_trends b\n          ON\n            a.sentences = b.terms)\n        GROUP BY\n          date,\n          topic_id,\n          category\n        )\n          \"\"\"\n    ).result()\n\n    return (\n    f'{target_bq_table}',\n    )\n\n"
+            ],
+            "image": "python:3.9"
+          }
+        },
+        "exec-auto-cluster": {
+          "container": {
+            "args": [
+              "--executor_input",
+              "{{$}}",
+              "--function_to_execute",
+              "auto_cluster"
+            ],
+            "command": [
+              "sh",
+              "-c",
+              "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet     --no-warn-script-location 'google-cloud-bigquery==2.18.0' 'pandas' 'pyarrow' 'kfp==1.8.12' && \"$0\" \"$@\"\n",
+              "sh",
+              "-ec",
+              "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef auto_cluster(\n    cluster_min: int,\n    cluster_max: int,\n    labels: list,\n    cluster_train_table: str,\n    classified_terms_table: str,\n    target_table: str,\n    project_id: str = 'cpg-cdp'\n    ) -> NamedTuple('Outputs', [('target_table', str)]):\n\n    from google.cloud import bigquery\n\n\n    bq_client = bigquery.Client(project_id)\n\n\n    prob_pivot_sql = \"\"\n    for i, l in enumerate(labels):\n        prob_pivot_sql += (f\"(select max(probs.prob) from UNNEST(t.predicted_label_probs) probs where probs.label = '{l}') as _{i}_prob, \")\n\n    table_sql_for_clustering = f\"\"\"\n        SELECT * except(predicted_label_probs),\n        {prob_pivot_sql}\n        FROM {classified_terms_table} t \n        \"\"\"\n\n    kmeans_table_sql = f\"\"\"\n        create or replace table {cluster_train_table} as (\n        select distinct * EXCEPT(date, geo_id, series_id, terms, category_rank, split_col) from (\n            {table_sql_for_clustering})\n            )\n            \"\"\"\n    bq_client.query(kmeans_table_sql).result()\n\n    ## use this function to get the name of the topic in the clustering\n    def only_upper(s: str):\n        upper_chars = \"\"\n        for char in s:\n            if char.isupper():\n                upper_chars += char\n        return upper_chars\n\n        ## we use this to find where the DB index flattens for n_clusters and use that for optimal number of clusters per topic\n\n    def loop_n_clus_and_get_db_index(cluster_min: int, cluster_max: int, label: str):\n\n        label_upper = only_upper(label) #get only the upper case letters to denote the model name\n        return_data = {label: []}\n        for n_clusters in range(cluster_min, cluster_max+1):\n            print(f\"Training for {n_clusters} clusters\")\n            # return_data[label].append({'model_name': f'trendspotting.cat_clus_{label_upper}_{n_clusters}_png_hair_22'})\n            kmeans_sql = f\"\"\"\n            CREATE OR REPLACE MODEL trendspotting.cat_clus_{label_upper}_{n_clusters}_png_hair_22\n            OPTIONS(model_type='kmeans', num_clusters={n_clusters}, standardize_features = true) AS\n            select * EXCEPT(predicted_label, sentences) from {cluster_train_table}\n            WHERE predicted_label = '{label}'\n            \"\"\"\n            bq_client.query(kmeans_sql).result()\n            #next, get the DB index to assess the cluster quality\n            sql = f\"\"\"\n            SELECT\n              *\n            FROM\n              ML.EVALUATE (MODEL trendspotting.cat_clus_{label_upper}_{n_clusters}_png_hair_22)\n              \"\"\"\n            data = bq_client.query(sql).to_dataframe()\n            print(f\"DB Index: {data.davies_bouldin_index[0]}\")\n            return_data[label].append({f'trendspotting.cat_clus_{label_upper}_{n_clusters}_png_hair_22': data.davies_bouldin_index[0]})\n\n            time.sleep(60)\n\n        return(return_data)\n\n    data_dict = {}\n\n    #loop over labels\n    for label in labels:\n        print(f\"Tranining for label: {label}\")\n        cluster_data = loop_n_clus_and_get_db_index(cluster_min, cluster_max, label)\n        data_dict.update(cluster_data) #update with the results\n        time.sleep(60)\n\n    # find the min DB score cluster for each topic, delete the other models and then score based on topic id\n\n    optimal_models_by_label = {}\n    for label in labels:\n        prior_db=999 # set this high\n        for c in data_dict[label]:\n            if list(c.values())[0] < prior_db:\n                prior_db = list(c.values())[0]\n                optimal_model = list(c.keys())[0]         \n        print(optimal_model)\n        optimal_models_by_label.update({label: optimal_model})\n    print(f\"Optimal models found: {optimal_models_by_label}\")\n\n    # save optimal model dictionary to gcs\n    from google.cloud import storage\n\n    import pickle\n\n    with open('./optimal_models.dict', 'wb') as file:\n        pickle.dump(optimal_models_by_label, file)\n\n    bucket_name = 'trendspotting-pipeline'\n\n    storage_client = storage.Client(project=PROJECT_ID)\n    bucket = storage_client.bucket(bucket_name)\n    blob = bucket.blob('optimal_models.dict')\n\n    blob.upload_from_filename('optimal_models.dict')\n\n    print(\"Deleting sub optimal models\")\n\n    #delete the sub-optimal models\n    def delete_model_sql(model_name):\n        return f\"DROP MODEL IF EXISTS {model_name}\"\n\n    for label in labels.predicted_label:\n        optimal_model_for_label = optimal_models_by_label[label]\n        for c in data_dict[label]:\n            if list(c.keys())[0] != optimal_model_for_label:\n                sub_optimal_model = list(c.keys())[0]\n                bq_client.query(delete_model_sql(sub_optimal_model)).result() #clean up the models\n                time.sleep(5)\n\n   #last, score using a union query for each label\n\n    def score_cluster(label, model_name):\n        predict_sql = f\"\"\"\n                SELECT\n                  *\n                FROM\n                  ML.PREDICT (MODEL {model_name},\n                  (SELECT * EXCEPT(predicted_label, sentences), \n                  sentences as terms, \n                  predicted_label as category\n                  from {cluster_train_table}\n                  where predicted_label = '{label}'))\n                  \"\"\"\n        return(predict_sql)\n\n    predict_sql = \"\"\n    for i, label in enumerate(labels.predicted_label):\n        predict_sql += score_cluster(label, optimal_models_by_label[label])\n        if len(labels.predicted_label)-1 == i:\n            break\n        else:\n            predict_sql += \"\"\"\n            UNION ALL\n            \"\"\"\n\n    def score_table(predict_sql, target_table=target_table):\n        return(f\"CREATE OR REPLACE TABLE {target_table} AS ({predict_sql})\")\n\n    segment_score_sql = score_table(predict_sql)\n\n    bq_client.query(segment_score_sql).result()\n\n    return(target_table)\n\n"
             ],
             "image": "python:3.9"
           }
@@ -698,6 +1388,26 @@
             "image": "python:3.9"
           }
         },
+        "exec-if-tbl-exists": {
+          "container": {
+            "args": [
+              "--executor_input",
+              "{{$}}",
+              "--function_to_execute",
+              "if_tbl_exists"
+            ],
+            "command": [
+              "sh",
+              "-c",
+              "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet     --no-warn-script-location 'google-cloud-bigquery==2.18.0' 'kfp==1.8.12' && \"$0\" \"$@\"\n",
+              "sh",
+              "-ec",
+              "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef if_tbl_exists(table_ref: str, project_id: str) -> str:\n    from google.cloud import bigquery\n    bq_client = bigquery.Client(project_id)\n    from google.cloud.exceptions import NotFound\n    try:\n        bq_client.get_table(table_ref)\n        return \"True\"\n    except NotFound:\n        return \"False\"\n\n"
+            ],
+            "image": "python:3.9"
+          }
+        },
         "exec-nlp-featurize-and-cluster": {
           "container": {
             "args": [
@@ -797,71 +1507,35 @@
             ],
             "image": "gcr.io/ml-pipeline/google-cloud-pipeline-components:1.0.5"
           }
+        },
+        "exec-train-classification-model": {
+          "container": {
+            "args": [
+              "--executor_input",
+              "{{$}}",
+              "--function_to_execute",
+              "train_classification_model"
+            ],
+            "command": [
+              "sh",
+              "-c",
+              "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet     --no-warn-script-location 'google-cloud-bigquery==2.18.0' 'pytz' 'kfp==1.8.12' && \"$0\" \"$@\"\n",
+              "sh",
+              "-ec",
+              "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef train_classification_model(\n      target_table: str,\n      source_table: str,\n      label_table: str,\n      train_table: str,\n      classification_model_name: str,\n      classification_budget_hours: int,\n      project_id: str = 'cpg-cdp'\n    ) -> str:\n\n    from google.cloud import bigquery\n    bq_client = bigquery.Client(project_id)\n\n    source_table_no_bq = source_table.strip('bq://')\n\n    sql = f\"\"\" CREATE OR REPLACE TABLE\n      {train_table} AS (\n      with distinct_data as (\n      SELECT DISTINCT\n        * EXCEPT(category_rank, series_id, date)\n      FROM\n        {source_table_no_bq} a\n      INNER JOIN\n        {label_table} b\n      ON\n        a.sentences = b.terms )\n      select distinct *,\n      case when rand() > 0.9 then 'VALIDATE' when rand() > 0.8 then 'TEST' else 'TRAIN' end as dataframe\n      from distinct_data \n      WHERE label is not null\n        )\n    \"\"\"\n\n    bq_client.query(sql).result()\n\n    model_sql = f\"\"\"CREATE OR REPLACE MODEL\n      {classification_model_name}\n    OPTIONS\n      ( model_type='AUTOML_CLASSIFIER',\n        BUDGET_HOURS={classification_budget_hours},\n        input_label_cols=['label']\n      ) AS\n    SELECT\n      * EXCEPT(dataframe, count)\n    FROM\n     {train_table}\n    WHERE\n      dataframe = 'TRAIN'\"\"\"\n\n    bq_client.query(model_sql).result()\n\n    score_table_sql = f\"\"\"CREATE OR REPLACE TABLE {target_table} as (\n    SELECT\n      *\n    FROM\n      ML.PREDICT (MODEL {classification_model_name},\n        (\n        SELECT\n          *,\n            sentences as terms\n        FROM\n           {source_table}\n         )\n      )\n    )\"\"\"\n\n    bq_client.query(score_table_sql).result()\n\n    return(target_table)\n\n"
+            ],
+            "image": "python:3.9"
+          }
         }
       }
     },
     "pipelineInfo": {
-      "name": "v2-png-hair-22-trendspotting-pipeline-v2"
+      "name": "v4-png-hair-22-trendspotting-pipeline-v4"
     },
     "root": {
       "dag": {
         "tasks": {
-          "aggregate-clusters": {
-            "cachingOptions": {
-              "enableCache": true
-            },
-            "componentRef": {
-              "name": "comp-aggregate-clusters"
-            },
-            "dependentTasks": [
-              "nlp-featurize-and-cluster"
-            ],
-            "inputs": {
-              "parameters": {
-                "model_name": {
-                  "componentInputParameter": "model_name"
-                },
-                "override": {
-                  "runtimeValue": {
-                    "constantValue": {
-                      "stringValue": "False"
-                    }
-                  }
-                },
-                "project_id": {
-                  "runtimeValue": {
-                    "constantValue": {
-                      "stringValue": "cpg-cdp"
-                    }
-                  }
-                },
-                "source_table": {
-                  "taskOutputParameter": {
-                    "outputParameterKey": "term_cluster_table",
-                    "producerTask": "nlp-featurize-and-cluster"
-                  }
-                },
-                "target_table": {
-                  "componentInputParameter": "cluster_table_agg"
-                },
-                "train_end": {
-                  "componentInputParameter": "train_end"
-                },
-                "train_st": {
-                  "componentInputParameter": "train_st"
-                },
-                "valid_end": {
-                  "componentInputParameter": "valid_end"
-                },
-                "valid_st": {
-                  "componentInputParameter": "valid_st"
-                }
-              }
-            },
-            "taskInfo": {
-              "name": "aggregate-clusters"
-            }
-          },
           "automl-forecasting-training-job": {
             "cachingOptions": {
               "enableCache": true
@@ -1018,190 +1692,125 @@
               "name": "automl-forecasting-training-job"
             }
           },
-          "automl-forecasting-training-job-2": {
-            "cachingOptions": {
-              "enableCache": true
-            },
+          "condition-1": {
             "componentRef": {
-              "name": "comp-automl-forecasting-training-job-2"
+              "name": "comp-condition-1"
             },
             "dependentTasks": [
-              "time-series-dataset-create-2"
+              "if-tbl-exists",
+              "prep-forecast-term-level"
             ],
             "inputs": {
-              "artifacts": {
-                "dataset": {
-                  "taskOutputArtifact": {
-                    "outputArtifactKey": "dataset",
-                    "producerTask": "time-series-dataset-create-2"
-                  }
-                }
-              },
               "parameters": {
-                "available_at_forecast_columns": {
-                  "runtimeValue": {
-                    "constantValue": {
-                      "stringValue": "[\"date\"]"
-                    }
-                  }
+                "pipelineparam--auto_cluster_target_table": {
+                  "componentInputParameter": "auto_cluster_target_table"
                 },
-                "budget_milli_node_hours": {
+                "pipelineparam--auto_cluster_train_table": {
+                  "componentInputParameter": "auto_cluster_train_table"
+                },
+                "pipelineparam--auto_max_cluster": {
+                  "componentInputParameter": "auto_max_cluster"
+                },
+                "pipelineparam--auto_min_cluster": {
+                  "componentInputParameter": "auto_min_cluster"
+                },
+                "pipelineparam--budget_milli_node_hours_cluster": {
                   "componentInputParameter": "budget_milli_node_hours_cluster"
                 },
-                "column_transformations": {
-                  "runtimeValue": {
-                    "constantValue": {
-                      "stringValue": "[{\"numeric\": {\"columnName\": \"volume\"}}, {\"timestamp\": {\"columnName\": \"date\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p1\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p2\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p3\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p4\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p5\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p6\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p7\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p8\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p9\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p10\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p11\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p12\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p13\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p14\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p15\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p16\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p17\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p18\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p19\"}}, {\"numeric\": {\"columnName\": \"comments_embed_p20\"}}]"
-                    }
-                  }
+                "pipelineparam--classification_model_budget": {
+                  "componentInputParameter": "classification_model_budget"
                 },
-                "context_window": {
+                "pipelineparam--classification_model_name": {
+                  "componentInputParameter": "classification_model_name"
+                },
+                "pipelineparam--classification_train_table": {
+                  "componentInputParameter": "classification_train_table"
+                },
+                "pipelineparam--cluster_table": {
+                  "componentInputParameter": "cluster_table"
+                },
+                "pipelineparam--cluster_table_agg": {
+                  "componentInputParameter": "cluster_table_agg"
+                },
+                "pipelineparam--context_window": {
                   "componentInputParameter": "context_window"
                 },
-                "data_granularity_count": {
-                  "runtimeValue": {
-                    "constantValue": {
-                      "intValue": "1"
-                    }
-                  }
+                "pipelineparam--ds_display_name_cluster": {
+                  "componentInputParameter": "ds_display_name_cluster"
                 },
-                "data_granularity_unit": {
-                  "runtimeValue": {
-                    "constantValue": {
-                      "stringValue": "week"
-                    }
-                  }
-                },
-                "display_name": {
-                  "runtimeValue": {
-                    "constantValue": {
-                      "stringValue": "train-cluster-forecast-futurama"
-                    }
-                  }
-                },
-                "export_evaluated_data_items": {
-                  "runtimeValue": {
-                    "constantValue": {
-                      "intValue": "1"
-                    }
-                  }
-                },
-                "export_evaluated_data_items_bigquery_destination_uri": {
-                  "componentInputParameter": "target_cluster_forecast_table"
-                },
-                "export_evaluated_data_items_override_destination": {
-                  "runtimeValue": {
-                    "constantValue": {
-                      "intValue": "1"
-                    }
-                  }
-                },
-                "forecast_horizon": {
+                "pipelineparam--forecast_horizon": {
                   "componentInputParameter": "forecast_horizon"
                 },
-                "labels": {
-                  "runtimeValue": {
-                    "constantValue": {
-                      "stringValue": "{}"
-                    }
+                "pipelineparam--if-tbl-exists-Output": {
+                  "taskOutputParameter": {
+                    "outputParameterKey": "Output",
+                    "producerTask": "if-tbl-exists"
                   }
                 },
-                "location": {
+                "pipelineparam--label_list": {
+                  "componentInputParameter": "label_list"
+                },
+                "pipelineparam--label_table": {
+                  "componentInputParameter": "label_table"
+                },
+                "pipelineparam--location": {
                   "componentInputParameter": "location"
                 },
-                "model_display_name": {
-                  "runtimeValue": {
-                    "constantValue": {
-                      "stringValue": "cluster-forecast-futurama"
-                    }
+                "pipelineparam--model_name": {
+                  "componentInputParameter": "model_name"
+                },
+                "pipelineparam--prep-forecast-term-level-term_train_table": {
+                  "taskOutputParameter": {
+                    "outputParameterKey": "term_train_table",
+                    "producerTask": "prep-forecast-term-level"
                   }
                 },
-                "optimization_objective": {
-                  "runtimeValue": {
-                    "constantValue": {
-                      "stringValue": "minimize-rmse"
-                    }
-                  }
+                "pipelineparam--scored_classification_table": {
+                  "componentInputParameter": "scored_classification_table"
                 },
-                "predefined_split_column_name": {
-                  "runtimeValue": {
-                    "constantValue": {
-                      "stringValue": "split_col"
-                    }
-                  }
+                "pipelineparam--target_cluster_forecast_table": {
+                  "componentInputParameter": "target_cluster_forecast_table"
                 },
-                "project": {
+                "pipelineparam--train_end": {
+                  "componentInputParameter": "train_end"
+                },
+                "pipelineparam--train_st": {
+                  "componentInputParameter": "train_st"
+                },
+                "pipelineparam--valid_end": {
+                  "componentInputParameter": "valid_end"
+                },
+                "pipelineparam--valid_st": {
+                  "componentInputParameter": "valid_st"
+                },
+                "pipelineparam--vertex_project": {
                   "componentInputParameter": "vertex_project"
-                },
-                "target_column": {
-                  "runtimeValue": {
-                    "constantValue": {
-                      "stringValue": "volume"
-                    }
-                  }
-                },
-                "time_column": {
-                  "runtimeValue": {
-                    "constantValue": {
-                      "stringValue": "date"
-                    }
-                  }
-                },
-                "time_series_attribute_columns": {
-                  "runtimeValue": {
-                    "constantValue": {
-                      "stringValue": "[\"comments_embed_p1\", \"comments_embed_p2\", \"comments_embed_p3\", \"comments_embed_p4\", \"comments_embed_p5\", \"comments_embed_p6\", \"comments_embed_p7\", \"comments_embed_p8\", \"comments_embed_p9\", \"comments_embed_p10\", \"comments_embed_p11\", \"comments_embed_p12\", \"comments_embed_p13\", \"comments_embed_p14\", \"comments_embed_p15\", \"comments_embed_p16\", \"comments_embed_p17\", \"comments_embed_p18\", \"comments_embed_p19\", \"comments_embed_p20\"]"
-                    }
-                  }
-                },
-                "time_series_identifier_column": {
-                  "runtimeValue": {
-                    "constantValue": {
-                      "stringValue": "centroid_id"
-                    }
-                  }
-                },
-                "unavailable_at_forecast_columns": {
-                  "runtimeValue": {
-                    "constantValue": {
-                      "stringValue": "[\"volume\"]"
-                    }
-                  }
                 }
               }
             },
             "taskInfo": {
-              "name": "automl-forecasting-training-job-2"
+              "name": "condition-1"
+            },
+            "triggerPolicy": {
+              "condition": "inputs.parameters['pipelineparam--if-tbl-exists-Output'].string_value == 'True'"
             }
           },
-          "bigquery-create-model-job": {
-            "cachingOptions": {
-              "enableCache": true
-            },
+          "condition-2": {
             "componentRef": {
-              "name": "comp-bigquery-create-model-job"
+              "name": "comp-condition-2"
             },
+            "dependentTasks": [
+              "if-tbl-exists"
+            ],
             "inputs": {
               "parameters": {
-                "job_configuration_query": {
-                  "runtimeValue": {
-                    "constantValue": {
-                      "stringValue": "{}"
-                    }
-                  }
+                "pipelineparam--cluster_table": {
+                  "componentInputParameter": "cluster_table"
                 },
-                "labels": {
-                  "runtimeValue": {
-                    "constantValue": {
-                      "stringValue": "{}"
-                    }
-                  }
-                },
-                "location": {
-                  "runtimeValue": {
-                    "constantValue": {
-                      "stringValue": "US"
-                    }
+                "pipelineparam--if-tbl-exists-Output": {
+                  "taskOutputParameter": {
+                    "outputParameterKey": "Output",
+                    "producerTask": "if-tbl-exists"
                   }
                 },
                 "pipelineparam--model_name": {
@@ -1216,34 +1825,19 @@
                 "pipelineparam--subcat_id": {
                   "componentInputParameter": "subcat_id"
                 },
+                "pipelineparam--train_end": {
+                  "componentInputParameter": "train_end"
+                },
                 "pipelineparam--train_st": {
                   "componentInputParameter": "train_st"
-                },
-                "project": {
-                  "runtimeValue": {
-                    "constantValue": {
-                      "stringValue": "cpg-cdp"
-                    }
-                  }
-                },
-                "query": {
-                  "runtimeValue": {
-                    "constantValue": {
-                      "stringValue": "CREATE TEMPORARY FUNCTION arr_to_input_20(arr ARRAY<FLOAT64>)\n                        RETURNS \n                        STRUCT<p1 FLOAT64, p2 FLOAT64, p3 FLOAT64, p4 FLOAT64,\n                               p5 FLOAT64, p6 FLOAT64, p7 FLOAT64, p8 FLOAT64, \n                               p9 FLOAT64, p10 FLOAT64, p11 FLOAT64, p12 FLOAT64, \n                               p13 FLOAT64, p14 FLOAT64, p15 FLOAT64, p16 FLOAT64,\n                               p17 FLOAT64, p18 FLOAT64, p19 FLOAT64, p20 FLOAT64>\n                        AS (\n                        STRUCT(\n                            arr[OFFSET(0)]\n                            , arr[OFFSET(1)]\n                            , arr[OFFSET(2)]\n                            , arr[OFFSET(3)]\n                            , arr[OFFSET(4)]\n                            , arr[OFFSET(5)]\n                            , arr[OFFSET(6)]\n                            , arr[OFFSET(7)]\n                            , arr[OFFSET(8)]\n                            , arr[OFFSET(9)]\n                            , arr[OFFSET(10)]\n                            , arr[OFFSET(11)]\n                            , arr[OFFSET(12)]\n                            , arr[OFFSET(13)]\n                            , arr[OFFSET(14)]\n                            , arr[OFFSET(15)]\n                            , arr[OFFSET(16)]\n                            , arr[OFFSET(17)]\n                            , arr[OFFSET(18)]\n                            , arr[OFFSET(19)]    \n                        ));\n                        \n            CREATE OR REPLACE MODEL `{{$.inputs.parameters['pipelineparam--model_name']}}` OPTIONS(model_type='kmeans', KMEANS_INIT_METHOD='KMEANS++', num_clusters={{$.inputs.parameters['pipelineparam--n_clusters']}}) AS\n                    select arr_to_input_20(output_0) AS comments_embed from \n                        ML.PREDICT(MODEL trendspotting.swivel_text_embed,(\n                      SELECT date, geo_name, term AS sentences, volume\n                      FROM `{{$.inputs.parameters['pipelineparam--source_table']}}`\n                      WHERE date >= '{{$.inputs.parameters['pipelineparam--train_st']}}'\n                      and category_id = {{$.inputs.parameters['pipelineparam--subcat_id']}}\n                      ))\n    "
-                    }
-                  }
-                },
-                "query_parameters": {
-                  "runtimeValue": {
-                    "constantValue": {
-                      "stringValue": "[]"
-                    }
-                  }
                 }
               }
             },
             "taskInfo": {
-              "name": "bigquery-create-model-job"
+              "name": "condition-2"
+            },
+            "triggerPolicy": {
+              "condition": "inputs.parameters['pipelineparam--if-tbl-exists-Output'].string_value == 'False'"
             }
           },
           "create-prediction-dataset-term-level": {
@@ -1355,54 +1949,25 @@
               "name": "create-top-mover-table"
             }
           },
-          "nlp-featurize-and-cluster": {
+          "if-tbl-exists": {
             "cachingOptions": {
               "enableCache": true
             },
             "componentRef": {
-              "name": "comp-nlp-featurize-and-cluster"
+              "name": "comp-if-tbl-exists"
             },
-            "dependentTasks": [
-              "bigquery-create-model-job"
-            ],
             "inputs": {
               "parameters": {
-                "model_name": {
-                  "componentInputParameter": "model_name"
-                },
-                "override": {
-                  "runtimeValue": {
-                    "constantValue": {
-                      "stringValue": "False"
-                    }
-                  }
-                },
                 "project_id": {
-                  "runtimeValue": {
-                    "constantValue": {
-                      "stringValue": "cpg-cdp"
-                    }
-                  }
+                  "componentInputParameter": "vertex_project"
                 },
-                "source_table": {
-                  "componentInputParameter": "source_table"
-                },
-                "subcat_id": {
-                  "componentInputParameter": "subcat_id"
-                },
-                "target_table": {
-                  "componentInputParameter": "cluster_table"
-                },
-                "train_end": {
-                  "componentInputParameter": "train_end"
-                },
-                "train_st": {
-                  "componentInputParameter": "train_st"
+                "table_ref": {
+                  "componentInputParameter": "label_table"
                 }
               }
             },
             "taskInfo": {
-              "name": "nlp-featurize-and-cluster"
+              "name": "if-tbl-exists"
             }
           },
           "prep-forecast-term-level": {
@@ -1438,11 +2003,7 @@
                   }
                 },
                 "target_table": {
-                  "runtimeValue": {
-                    "constantValue": {
-                      "stringValue": "cpg-cdp.trendspotting.ETL_futurama_weekly_embed_aml_pl_png_hair_22"
-                    }
-                  }
+                  "componentInputParameter": "fix_embed_target"
                 }
               }
             },
@@ -1489,56 +2050,37 @@
             "taskInfo": {
               "name": "time-series-dataset-create"
             }
-          },
-          "time-series-dataset-create-2": {
-            "cachingOptions": {
-              "enableCache": true
-            },
-            "componentRef": {
-              "name": "comp-time-series-dataset-create-2"
-            },
-            "dependentTasks": [
-              "aggregate-clusters"
-            ],
-            "inputs": {
-              "parameters": {
-                "bq_source": {
-                  "taskOutputParameter": {
-                    "outputParameterKey": "term_cluster_agg_table",
-                    "producerTask": "aggregate-clusters"
-                  }
-                },
-                "display_name": {
-                  "componentInputParameter": "ds_display_name_cluster"
-                },
-                "labels": {
-                  "runtimeValue": {
-                    "constantValue": {
-                      "stringValue": "{}"
-                    }
-                  }
-                },
-                "location": {
-                  "componentInputParameter": "location"
-                },
-                "project": {
-                  "componentInputParameter": "vertex_project"
-                }
-              }
-            },
-            "taskInfo": {
-              "name": "time-series-dataset-create-2"
-            }
           }
         }
       },
       "inputDefinitions": {
         "parameters": {
+          "auto_cluster_target_table": {
+            "type": "STRING"
+          },
+          "auto_cluster_train_table": {
+            "type": "STRING"
+          },
+          "auto_max_cluster": {
+            "type": "INT"
+          },
+          "auto_min_cluster": {
+            "type": "INT"
+          },
           "budget_milli_node_hours": {
             "type": "INT"
           },
           "budget_milli_node_hours_cluster": {
             "type": "INT"
+          },
+          "classification_model_budget": {
+            "type": "INT"
+          },
+          "classification_model_name": {
+            "type": "STRING"
+          },
+          "classification_train_table": {
+            "type": "STRING"
           },
           "cluster_table": {
             "type": "STRING"
@@ -1555,10 +2097,19 @@
           "ds_display_name_terms": {
             "type": "STRING"
           },
+          "fix_embed_target": {
+            "type": "STRING"
+          },
           "forecast_horizon": {
             "type": "INT"
           },
           "k_means_name": {
+            "type": "STRING"
+          },
+          "label_list": {
+            "type": "STRING"
+          },
+          "label_table": {
             "type": "STRING"
           },
           "location": {
@@ -1574,6 +2125,9 @@
             "type": "STRING"
           },
           "predict_on_dt": {
+            "type": "STRING"
+          },
+          "scored_classification_table": {
             "type": "STRING"
           },
           "six_month_dt": {

@@ -263,6 +263,7 @@ def nlp_featurize_and_cluster(
 def aggregate_clusters(
     source_table: str,
     target_table: str,
+    category_table: str,
     train_st: str,
     train_end: str,
     valid_st: str,
@@ -279,52 +280,70 @@ def aggregate_clusters(
     target_bq_table = 'bq://' + target_table
 
     bq_client = bigquery.Client(project=project_id)
-    (
+    
+    
     bq_client.query(
       f"""
-            CREATE OR REPLACE TABLE `{target_table}` as (
-            with centroids as (select * from 
-            (SELECT
-            centroid_id, feature, numerical_value
-            FROM
-              ML.CENTROIDS(MODEL `{model_name}`)
-            )
-            PIVOT(avg(numerical_value) for feature in ('comments_embed_p1',
-            'comments_embed_p2',
-            'comments_embed_p3',
-            'comments_embed_p4',
-            'comments_embed_p5',
-            'comments_embed_p6',
-            'comments_embed_p7',
-            'comments_embed_p8',
-            'comments_embed_p9',
-            'comments_embed_p10',
-            'comments_embed_p11',
-            'comments_embed_p12',
-            'comments_embed_p13',
-            'comments_embed_p14',
-            'comments_embed_p15',
-            'comments_embed_p16',
-            'comments_embed_p17',
-            'comments_embed_p18',
-            'comments_embed_p19',
-            'comments_embed_p20'))
-                              )
-            select volume, date, b.*,
-            case when date between '{train_st}' and  '{train_end}' then 'TRAIN'
-                      when date between '{valid_st}' and '{valid_end}' then 'VALIDATE'
-                     else 'TEST' end as split_col
-            from (
-                select sum(volume) as volume, date, centroid_id 
-                from {source_table} group by date, centroid_id
-            ) a
-            inner join centroids b on a.centroid_id = b.centroid_id
-            )
+       CREATE OR REPLACE TABLE `{target_table}` as (
+        WITH
+          scored_trends AS (
+          SELECT
+            centroid_id AS topic_id,
+            terms,
+            category
+          FROM
+            {category_table} )
+        SELECT
+          SUM(volume) as volume,
+          date,
+          topic_id,
+          category,
+          CONCAT(category, topic_id) as series_id,
+          AVG(comments_embed.p1) AS comments_embed_p1,
+          AVG(comments_embed.p2) AS comments_embed_p2,
+          AVG(comments_embed.p3) AS comments_embed_p3,
+          AVG(comments_embed.p4) AS comments_embed_p4,
+          AVG(comments_embed.p5) AS comments_embed_p5,
+          AVG(comments_embed.p6) AS comments_embed_p6,
+          AVG(comments_embed.p7) AS comments_embed_p7,
+          AVG(comments_embed.p8) AS comments_embed_p8,
+          AVG(comments_embed.p9) AS comments_embed_p9,
+          AVG(comments_embed.p10) AS comments_embed_p10,
+          AVG(comments_embed.p11) AS comments_embed_p11,
+          AVG(comments_embed.p12) AS comments_embed_p12,
+          AVG(comments_embed.p13) AS comments_embed_p13,
+          AVG(comments_embed.p14) AS comments_embed_p14,
+          AVG(comments_embed.p15) AS comments_embed_p15,
+          AVG(comments_embed.p16) AS comments_embed_p16,
+          AVG(comments_embed.p17) AS comments_embed_p17,
+          AVG(comments_embed.p18) AS comments_embed_p18,
+          AVG(comments_embed.p19) AS comments_embed_p19,
+          AVG(comments_embed.p20) AS comments_embed_p20,
+          case when date between '{train_st}' and  '{train_end}' then 'TRAIN'
+                              when date between '{valid_st}' and '{valid_end}' then 'VALIDATE'
+                             else 'TEST' end as split_col
+        FROM (
+          SELECT
+            volume,
+            a.date,
+            centroid_id,
+            topic_id,
+            category,
+            a.comments_embed
+          FROM
+            {source_table} a
+          INNER JOIN
+            scored_trends b
+          ON
+            a.sentences = b.terms)
+        GROUP BY
+          date,
+          topic_id,
+          category
+        )
           """
-    )
-    .result()
-    )
-
+    ).result()
+    
     return (
     f'{target_bq_table}',
     )
@@ -575,8 +594,9 @@ def auto_cluster(
     cluster_min: int,
     cluster_max: int,
     labels: list,
-    source_table: str = "trendspotting.cat_clus_train_png_hair_22",
-    target_table: str = "trendspotting.full_cat_clus_png_hair_22",
+    cluster_train_table: str,
+    classified_terms_table: str,
+    target_table: str,
     project_id: str = 'cpg-cdp'
     ) -> NamedTuple('Outputs', [('target_table', str)]):
     
@@ -584,6 +604,25 @@ def auto_cluster(
 
     
     bq_client = bigquery.Client(project_id)
+    
+    
+    prob_pivot_sql = ""
+    for i, l in enumerate(labels):
+        prob_pivot_sql += (f"(select max(probs.prob) from UNNEST(t.predicted_label_probs) probs where probs.label = '{l}') as _{i}_prob, ")
+    
+    table_sql_for_clustering = f"""
+        SELECT * except(predicted_label_probs),
+        {prob_pivot_sql}
+        FROM {classified_terms_table} t 
+        """
+    
+    kmeans_table_sql = f"""
+        create or replace table {cluster_train_table} as (
+        select distinct * EXCEPT(date, geo_id, series_id, terms, category_rank, split_col) from (
+            {table_sql_for_clustering})
+            )
+            """
+    bq_client.query(kmeans_table_sql).result()
 
     ## use this function to get the name of the topic in the clustering
     def only_upper(s: str):
@@ -605,7 +644,7 @@ def auto_cluster(
             kmeans_sql = f"""
             CREATE OR REPLACE MODEL trendspotting.cat_clus_{label_upper}_{n_clusters}_png_hair_22
             OPTIONS(model_type='kmeans', num_clusters={n_clusters}, standardize_features = true) AS
-            select * EXCEPT(predicted_label, sentences) from {source_table}
+            select * EXCEPT(predicted_label, sentences) from {cluster_train_table}
             WHERE predicted_label = '{label}'
             """
             bq_client.query(kmeans_sql).result()
@@ -623,6 +662,7 @@ def auto_cluster(
             time.sleep(60)
 
         return(return_data)
+    
     data_dict = {}
     
     #loop over labels
@@ -685,8 +725,8 @@ def auto_cluster(
                   ML.PREDICT (MODEL {model_name},
                   (SELECT * EXCEPT(predicted_label, sentences), 
                   sentences as terms, 
-                  predicted_label as category 
-                  from trendspotting.cat_clus_train_png_hair_22 
+                  predicted_label as category
+                  from {cluster_train_table}
                   where predicted_label = '{label}'))
                   """
         return(predict_sql)
@@ -701,15 +741,103 @@ def auto_cluster(
             UNION ALL
             """
 
-    def score_table(predict_sql, target_table="trendspotting.full_cat_clus_png_hair_22"):
+    def score_table(predict_sql, target_table=target_table):
         return(f"CREATE OR REPLACE TABLE {target_table} AS ({predict_sql})")
 
     segment_score_sql = score_table(predict_sql)
 
     bq_client.query(segment_score_sql).result()
     
-    
-    
     return(target_table)
 
+### Component to check if table exists
 
+@kfp.v2.dsl.component(
+  base_image='python:3.9',
+  packages_to_install=['google-cloud-bigquery==2.18.0'],
+) 
+def if_tbl_exists(table_ref: str, project_id: str) -> str:
+    from google.cloud import bigquery
+    bq_client = bigquery.Client(project_id)
+    from google.cloud.exceptions import NotFound
+    try:
+        bq_client.get_table(table_ref)
+        return "True"
+    except NotFound:
+        return "False"
+    
+    
+
+@kfp.v2.dsl.component(
+  base_image='python:3.9',
+  packages_to_install=['google-cloud-bigquery==2.18.0','pytz'],
+)
+def train_classification_model(
+      target_table: str,
+      source_table: str,
+      label_table: str,
+      train_table: str,
+      classification_model_name: str,
+      classification_budget_hours: int,
+      project_id: str = 'cpg-cdp'
+    ) -> str:
+    
+    from google.cloud import bigquery
+    bq_client = bigquery.Client(project_id)
+    
+    source_table_no_bq = source_table.strip('bq://')
+    
+    sql = f""" CREATE OR REPLACE TABLE
+      {train_table} AS (
+      with distinct_data as (
+      SELECT DISTINCT
+        * EXCEPT(category_rank, series_id, date)
+      FROM
+        {source_table_no_bq} a
+      INNER JOIN
+        {label_table} b
+      ON
+        a.sentences = b.terms )
+      select distinct *,
+      case when rand() > 0.9 then 'VALIDATE' when rand() > 0.8 then 'TEST' else 'TRAIN' end as dataframe
+      from distinct_data 
+      WHERE label is not null
+        )
+    """
+
+    bq_client.query(sql).result()
+    
+    model_sql = f"""CREATE OR REPLACE MODEL
+      {classification_model_name}
+    OPTIONS
+      ( model_type='AUTOML_CLASSIFIER',
+        BUDGET_HOURS={classification_budget_hours},
+        input_label_cols=['label']
+      ) AS
+    SELECT
+      * EXCEPT(dataframe, count)
+    FROM
+     {train_table}
+    WHERE
+      dataframe = 'TRAIN'"""
+    
+    bq_client.query(model_sql).result()
+    
+    score_table_sql = f"""CREATE OR REPLACE TABLE {target_table} as (
+    SELECT
+      *
+    FROM
+      ML.PREDICT (MODEL {classification_model_name},
+        (
+        SELECT
+          *,
+            sentences as terms
+        FROM
+           {source_table}
+         )
+      )
+    )"""
+    
+    bq_client.query(score_table_sql).result()
+    
+    return(target_table)
