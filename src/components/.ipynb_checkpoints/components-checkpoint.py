@@ -133,7 +133,7 @@ def prep_forecast_term_level(
 
 @kfp.v2.dsl.component(
   base_image='python:3.9',
-  packages_to_install=['google-cloud-bigquery==2.18.0'],
+  packages_to_install=['google-cloud-bigquery==2.18.0','pytz'],
 )
 def create_top_mover_table(
     source_table: str,
@@ -258,7 +258,7 @@ def nlp_featurize_and_cluster(
 
 @kfp.v2.dsl.component(
   base_image='python:3.9',
-  packages_to_install=['google-cloud-bigquery==2.18.0'],
+  packages_to_install=['google-cloud-bigquery==2.18.0','pytz'],
 )
 def aggregate_clusters(
     source_table: str,
@@ -598,9 +598,10 @@ def auto_cluster(
     classified_terms_table: str,
     target_table: str,
     project_id: str = 'cpg-cdp'
-    ) -> NamedTuple('Outputs', [('target_table', str)]):
+    ) -> str:
     
     from google.cloud import bigquery
+    import time
 
     
     bq_client = bigquery.Client(project_id)
@@ -613,7 +614,7 @@ def auto_cluster(
     table_sql_for_clustering = f"""
         SELECT * except(predicted_label_probs),
         {prob_pivot_sql}
-        FROM {classified_terms_table} t 
+        FROM `{classified_terms_table}` t 
         """
     
     kmeans_table_sql = f"""
@@ -644,7 +645,7 @@ def auto_cluster(
             kmeans_sql = f"""
             CREATE OR REPLACE MODEL trendspotting.cat_clus_{label_upper}_{n_clusters}_png_hair_22
             OPTIONS(model_type='kmeans', num_clusters={n_clusters}, standardize_features = true) AS
-            select * EXCEPT(predicted_label, sentences) from {cluster_train_table}
+            select * EXCEPT(predicted_label, sentences) from `{cluster_train_table}`
             WHERE predicted_label = '{label}'
             """
             bq_client.query(kmeans_sql).result()
@@ -678,11 +679,12 @@ def auto_cluster(
     for label in labels:
         prior_db=999 # set this high
         for c in data_dict[label]:
+            optimal_model = list(data_dict[label][0].keys())[0]
             if list(c.values())[0] < prior_db:
                 prior_db = list(c.values())[0]
-                optimal_model = list(c.keys())[0]         
-        print(optimal_model)
-        optimal_models_by_label.update({label: optimal_model})
+                optimal_model = list(c.keys())[0] 
+                print(optimal_model)
+            optimal_models_by_label.update({label: optimal_model})
     print(f"Optimal models found: {optimal_models_by_label}")
     
     # save optimal model dictionary to gcs
@@ -695,7 +697,7 @@ def auto_cluster(
 
     bucket_name = 'trendspotting-pipeline'
 
-    storage_client = storage.Client(project=PROJECT_ID)
+    storage_client = storage.Client(project=project_id)
     bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob('optimal_models.dict')
 
@@ -707,7 +709,7 @@ def auto_cluster(
     def delete_model_sql(model_name):
         return f"DROP MODEL IF EXISTS {model_name}"
 
-    for label in labels.predicted_label:
+    for label in labels:
         optimal_model_for_label = optimal_models_by_label[label]
         for c in data_dict[label]:
             if list(c.keys())[0] != optimal_model_for_label:
@@ -726,23 +728,23 @@ def auto_cluster(
                   (SELECT * EXCEPT(predicted_label, sentences), 
                   sentences as terms, 
                   predicted_label as category
-                  from {cluster_train_table}
+                  from `{cluster_train_table}`
                   where predicted_label = '{label}'))
                   """
         return(predict_sql)
 
     predict_sql = ""
-    for i, label in enumerate(labels.predicted_label):
+    for i, label in enumerate(labels):
         predict_sql += score_cluster(label, optimal_models_by_label[label])
-        if len(labels.predicted_label)-1 == i:
+        if len(labels)-1 == i:
             break
         else:
             predict_sql += """
             UNION ALL
             """
 
-    def score_table(predict_sql, target_table=target_table):
-        return(f"CREATE OR REPLACE TABLE {target_table} AS ({predict_sql})")
+    def score_table(predict_sql, tt=target_table):
+        return(f"CREATE OR REPLACE TABLE `{tt}` AS ({predict_sql})")
 
     segment_score_sql = score_table(predict_sql)
 
@@ -754,7 +756,7 @@ def auto_cluster(
 
 @kfp.v2.dsl.component(
   base_image='python:3.9',
-  packages_to_install=['google-cloud-bigquery==2.18.0'],
+  packages_to_install=['google-cloud-bigquery==2.18.0', 'pytz'],
 ) 
 def if_tbl_exists(table_ref: str, project_id: str) -> str:
     from google.cloud import bigquery
@@ -765,7 +767,6 @@ def if_tbl_exists(table_ref: str, project_id: str) -> str:
         return "True"
     except NotFound:
         return "False"
-    
     
 
 @kfp.v2.dsl.component(
@@ -793,9 +794,9 @@ def train_classification_model(
       SELECT DISTINCT
         * EXCEPT(category_rank, series_id, date)
       FROM
-        {source_table_no_bq} a
+        `{source_table_no_bq}` a
       INNER JOIN
-        {label_table} b
+        `{label_table}` b
       ON
         a.sentences = b.terms )
       select distinct *,
@@ -806,6 +807,7 @@ def train_classification_model(
     """
 
     bq_client.query(sql).result()
+    print("Training dataset for classification complete")
     
     model_sql = f"""CREATE OR REPLACE MODEL
       {classification_model_name}
@@ -817,12 +819,14 @@ def train_classification_model(
     SELECT
       * EXCEPT(dataframe, count)
     FROM
-     {train_table}
+     `{train_table}`
     WHERE
       dataframe = 'TRAIN'"""
     
     bq_client.query(model_sql).result()
     
+    
+    print("Training for classification complete")
     score_table_sql = f"""CREATE OR REPLACE TABLE {target_table} as (
     SELECT
       *
@@ -833,11 +837,12 @@ def train_classification_model(
           *,
             sentences as terms
         FROM
-           {source_table}
+           `{source_table_no_bq}`
          )
       )
     )"""
     
     bq_client.query(score_table_sql).result()
+    print("Scoring for classification complete")
     
     return(target_table)
