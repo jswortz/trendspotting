@@ -8,7 +8,7 @@ from typing import Any, Callable, Dict, NamedTuple, Optional
 
 @kfp.v2.dsl.component(
   base_image='python:3.9',
-  packages_to_install=['google-cloud-bigquery==2.18.0'],
+  packages_to_install=['google-cloud-bigquery==2.18.0','pytz'],
 )
 def create_prediction_dataset_term_level(
       target_table: str,
@@ -83,7 +83,7 @@ def create_prediction_dataset_term_level(
 
 @kfp.v2.dsl.component(
   base_image='python:3.9',
-  packages_to_install=['google-cloud-bigquery==2.18.0'],
+  packages_to_install=['google-cloud-bigquery==2.18.0','pytz'],
 )
 def prep_forecast_term_level(
     source_table: str,
@@ -95,6 +95,7 @@ def prep_forecast_term_level(
     from google.cloud import bigquery
 
     bq_client = bigquery.Client(project=project_id)
+    source_table_no_bq = source_table.strip('bq://')
     (
     bq_client.query(
       f"""
@@ -121,7 +122,60 @@ def prep_forecast_term_level(
         embed.p19 as emb19,
         embed.p20 as emb20
 
-        FROM `{source_table}` )
+        FROM `{source_table_no_bq}` )
+          """
+    )
+    .result()
+    )
+
+    return (
+    f'bq://{target_table}',
+    )
+
+@kfp.v2.dsl.component(
+  base_image='python:3.9',
+  packages_to_install=['google-cloud-bigquery==2.18.0','pytz'],
+)
+def prep_forecast_term_level_drop_embeddings(
+    source_table: str,
+    target_table: str,
+    override: str = 'False',
+    project_id: str = 'cpg-cdp'
+    ) -> NamedTuple('Outputs', [('term_train_table', str)]):
+    
+    from google.cloud import bigquery
+    
+    bq_client = bigquery.Client(project=project_id)
+    
+    source_table_no_bq = str(source_table).strip('bq://')
+    
+    (
+    bq_client.query(
+      f"""
+            CREATE OR REPLACE TABLE `{target_table}` as (
+        SELECT * except(
+        emb1, 
+        emb2,
+        emb3,
+        emb4,
+        emb5,
+        emb6,
+        emb7,
+        emb8,
+        emb9,
+        emb10,
+        emb11,
+        emb12,
+        emb13,
+        emb14,
+        emb15,
+        emb16,
+        emb17,
+        emb18,
+        emb19,
+        emb20)
+
+        FROM `{source_table_no_bq}` )
           """
     )
     .result()
@@ -161,7 +215,7 @@ def create_top_mover_table(
          geo_id as (select distinct geo_id, geo_name from `cpg-cdp.trendspotting.futurama_weekly`)
     SELECT a.date, 
        geo_id.geo_name, 
-       a.sentences, 
+       TRIM(a.series_id, a.geo_id) as sentences, 
        cast(a.category_rank as int64) as current_rank, 
        cast(a.category_rank as int64) - b.six_mo_forecast as six_delta_rank,
        cast(b.category_rank as int64) as six_mo_rank, 
@@ -184,7 +238,7 @@ def create_top_mover_table(
 
 @kfp.v2.dsl.component(
   base_image='python:3.9',
-  packages_to_install=['google-cloud-bigquery==2.18.0'],
+  packages_to_install=['google-cloud-bigquery==2.18.0','pytz'],
 )
 def nlp_featurize_and_cluster(
     source_table: str,
@@ -472,116 +526,12 @@ COLUMN_TRANSFORMATIONS = [
       "columnName": "geo_id"
     }
   },
-  {
-    "text": {
-      "columnName": "sentences"
-    }
-  },
+
   {
     "numeric": {
       "columnName": "category_rank"
     }
   },
-  {
-    "numeric": {
-      "columnName": "emb1"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "emb2"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "emb3"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "emb4"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "emb5"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "emb6"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "emb7"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "emb8"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "emb9"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "emb10"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "emb11"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "emb12"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "emb13"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "emb14"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "emb15"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "emb16"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "emb17"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "emb18"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "emb19"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "emb20"
-    }
-  }
 ]
 
 
