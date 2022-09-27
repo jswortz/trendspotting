@@ -293,7 +293,7 @@ def nlp_featurize_and_cluster(
                 from ML.PREDICT(MODEL `{model_name}`, (
                     select *, arr_to_input_20(output_0) AS comments_embed from 
                         ML.PREDICT(MODEL trendspotting.swivel_text_embed,(
-                      SELECT date, geo_name, term AS sentences, volume
+                      SELECT date, geo_name, term AS sentences, score
                       FROM `{source_table}`
                       WHERE date >= '{train_st}'
                       and category_id = {subcat_id}
@@ -348,7 +348,7 @@ def aggregate_clusters(
           FROM
             {category_table} )
         SELECT
-          SUM(volume) as volume,
+          SUM(score) as score,
           date,
           topic_id,
           category,
@@ -378,7 +378,7 @@ def aggregate_clusters(
                              else 'TEST' end as split_col
         FROM (
           SELECT
-            volume,
+            score,
             a.date,
             centroid_id,
             topic_id,
@@ -405,7 +405,7 @@ def aggregate_clusters(
 COLUMN_TRANSFORMS_CLUSTER = [
   {
     "numeric": {
-      "columnName": "volume"
+      "columnName": "score"
     }
   },
   {
