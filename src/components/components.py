@@ -67,7 +67,7 @@ def create_prediction_dataset_term_level(
             arr_to_input_20(output_0) as embed
         FROM ML.PREDICT(MODEL trendspotting.swivel_text_embed,
         (
-          SELECT date, geo_id, term AS sentences, category_rank, concat( term, geo_id) as series_id
+          SELECT date, geo_id, term AS sentences, score, concat( term, geo_id) as series_id
           FROM `{source_table_uri}` where category_id = {subcat_id} and date > "{train_st}"
         ))      
         )
@@ -153,7 +153,8 @@ def prep_forecast_term_level_drop_embeddings(
     bq_client.query(
       f"""
             CREATE OR REPLACE TABLE `{target_table}` as (
-        SELECT * except(
+        SELECT * 
+        except(
         emb1, 
         emb2,
         emb3,
@@ -210,22 +211,20 @@ def create_top_mover_table(
       f"""
             CREATE OR REPLACE TABLE {target_table} as (
     select * from
-      (with six_mo_val as (select *, predicted_category_rank.value as six_mo_forecast from `{source_table_no_bq}` 
+      (with six_mo_val as (select *, predicted_score.value as six_mo_forecast from `{source_table_no_bq}` 
         where predicted_on_date = '{predict_on_dt}' and date = '{six_month_dt}'),
-         geo_id as (select distinct geo_id, geo_name from `cpg-cdp.trendspotting.futurama_weekly`)
-    SELECT a.date, 
-       geo_id.geo_name, 
+       a.date,
+       b.date as future_date,
+       a.geo_id, 
        TRIM(a.series_id, a.geo_id) as sentences, 
-       cast(a.category_rank as int64) as current_rank, 
-       cast(a.category_rank as int64) - b.six_mo_forecast as six_delta_rank,
-       cast(b.category_rank as int64) as six_mo_rank, 
+       a.score as current_rank, 
+       a.score - b.six_mo_forecast as six_delta_rank,
+       b.score as six_mo_rank, 
        six_mo_forecast
       FROM `{source_table_no_bq}` a INNER JOIN 
        six_mo_val b on a.series_id = b.series_id 
-       inner join 
-       geo_id on cast(a.geo_id as int64) = geo_id.geo_id
-      WHERE a.date = '{predict_on_dt}'
-      ) where current_rank > 500 and six_mo_forecast < 1000 order by six_delta_rank desc limit {top_n_results} 
+      WHERE a.date = '{predict_on_dt}' and a.predicted_on_date = '{predict_on_dt}'
+      ) where  current_rank < six_mo_rank order by six_delta_rank desc limit {top_n_results} 
 )
           """
     )
@@ -529,7 +528,7 @@ COLUMN_TRANSFORMATIONS = [
 
   {
     "numeric": {
-      "columnName": "category_rank"
+      "columnName": "score"
     }
   },
 ]
@@ -718,6 +717,38 @@ def if_tbl_exists(table_ref: str, project_id: str) -> str:
     except NotFound:
         return "False"
     
+@kfp.v2.dsl.component(
+  base_image='python:3.9',
+)
+def if_list_input(input_: str) -> str:
+    try:
+        if input_[0] == '[':
+            return "True"
+    except:
+        return "False"
+    
+# component if list sources returned
+@kfp.v2.dsl.component(
+  base_image='python:3.9',
+  packages_to_install=['google-cloud-bigquery==2.18.0','pytz'],
+)
+def combine_source_tables(target_table: str, sources: str) -> NamedTuple('Outputs', [('combined_source_table', str)]):
+    res = sources.strip('][').split(', ')
+    query = f"create table {target_table} as (select * from {res[0]}"
+    for source in res[1:]:
+        query.append(f"union all select * from {source}")
+    query.append(")")
+    bq_client.query(query).result()
+    return target_table
+
+@kfp.v2.dsl.component(
+  base_image='python:3.9',
+)    
+def get_source_table(source1: str, source2: str) -> NamedTuple('Outputs', [('combined_source_table', str)]):
+    try:
+        return source1
+    except:
+        return source2
 
 @kfp.v2.dsl.component(
   base_image='python:3.9',
@@ -796,3 +827,120 @@ def train_classification_model(
     print("Scoring for classification complete")
     
     return(target_table)
+
+### Basic clustering
+
+@kfp.v2.dsl.component(
+  base_image='python:3.9',
+  packages_to_install=['google-cloud-bigquery==2.18.0', 
+                      'pytz'],
+)
+def aggregate_clusters_basic(
+    source_table: str,
+    target_table: str,
+    train_st: str,
+    train_end: str,
+    valid_st: str,
+    valid_end: str,
+    override: str = 'False',
+    project_id: str = 'cpg-cdp'
+    ) -> NamedTuple('Outputs', [('term_cluster_agg_table', str)]):
+    
+    from google.cloud import bigquery
+    
+    source_table_no_bq = source_table.strip('bq://')
+    
+    target_bq_table = 'bq://' + target_table
+
+    bq_client = bigquery.Client(project=project_id)
+    (
+    bq_client.query(
+      f"""
+            CREATE OR REPLACE TABLE {target_table} as (
+            with centroids as (select * from 
+            (SELECT
+            centroid_id, feature, numerical_value
+            FROM
+              ML.CENTROIDS(MODEL `trendspotting.embed_clustering_100`)
+            )
+            PIVOT(avg(numerical_value) for feature in ('comments_embed_p1',
+            'comments_embed_p2',
+            'comments_embed_p3',
+            'comments_embed_p4',
+            'comments_embed_p5',
+            'comments_embed_p6',
+            'comments_embed_p7',
+            'comments_embed_p8',
+            'comments_embed_p9',
+            'comments_embed_p10',
+            'comments_embed_p11',
+            'comments_embed_p12',
+            'comments_embed_p13',
+            'comments_embed_p14',
+            'comments_embed_p15',
+            'comments_embed_p16',
+            'comments_embed_p17',
+            'comments_embed_p18',
+            'comments_embed_p19',
+            'comments_embed_p20'))
+                              )
+            select score, date, b.*,
+            case when date between '{train_st}' and  '{train_end}' then 'TRAIN'
+                      when date between '{valid_st}' and '{valid_end}' then 'VALIDATE'
+                     else 'TEST' end as split_col
+            from (
+                select sum(score) as score, date, centroid_id 
+                from {source_table} group by date, centroid_id
+            ) a
+            inner join centroids b on a.centroid_id = b.centroid_id
+            )
+          """
+    )
+    .result()
+    )
+
+    return (
+    f'{target_bq_table}',
+    )
+
+def get_model_train_sql(model_name, n_clusters, source_table, train_st, subcat_id):
+    return f"""CREATE TEMPORARY FUNCTION arr_to_input_20(arr ARRAY<FLOAT64>)
+                        RETURNS 
+                        STRUCT<p1 FLOAT64, p2 FLOAT64, p3 FLOAT64, p4 FLOAT64,
+                               p5 FLOAT64, p6 FLOAT64, p7 FLOAT64, p8 FLOAT64, 
+                               p9 FLOAT64, p10 FLOAT64, p11 FLOAT64, p12 FLOAT64, 
+                               p13 FLOAT64, p14 FLOAT64, p15 FLOAT64, p16 FLOAT64,
+                               p17 FLOAT64, p18 FLOAT64, p19 FLOAT64, p20 FLOAT64>
+                        AS (
+                        STRUCT(
+                            arr[OFFSET(0)]
+                            , arr[OFFSET(1)]
+                            , arr[OFFSET(2)]
+                            , arr[OFFSET(3)]
+                            , arr[OFFSET(4)]
+                            , arr[OFFSET(5)]
+                            , arr[OFFSET(6)]
+                            , arr[OFFSET(7)]
+                            , arr[OFFSET(8)]
+                            , arr[OFFSET(9)]
+                            , arr[OFFSET(10)]
+                            , arr[OFFSET(11)]
+                            , arr[OFFSET(12)]
+                            , arr[OFFSET(13)]
+                            , arr[OFFSET(14)]
+                            , arr[OFFSET(15)]
+                            , arr[OFFSET(16)]
+                            , arr[OFFSET(17)]
+                            , arr[OFFSET(18)]
+                            , arr[OFFSET(19)]    
+                        ));
+                        
+            CREATE OR REPLACE MODEL `{model_name}` OPTIONS(model_type='kmeans', KMEANS_INIT_METHOD='KMEANS++', num_clusters={n_clusters}) AS
+                    select arr_to_input_20(output_0) AS comments_embed from 
+                        ML.PREDICT(MODEL trendspotting.swivel_text_embed,(
+                      SELECT date, geo_name, term AS sentences, score
+                      FROM `{source_table}`
+                      WHERE date >= '{train_st}'
+                      and category_id = {subcat_id}
+                      ))
+    """
