@@ -209,12 +209,13 @@ def create_top_mover_table(
     (
     bq_client.query(
       f"""
-            CREATE OR REPLACE TABLE {target_table} as (
+            CREATE OR REPLACE TABLE `{target_table}` as (
     select * from
       (with six_mo_val as (select *, predicted_score.value as six_mo_forecast from `{source_table_no_bq}` 
-        where predicted_on_date = '{predict_on_dt}' and date = '{six_month_dt}'),
-       a.date,
-       b.date as future_date,
+        where predicted_on_date = '{predict_on_dt}' and date = '{six_month_dt}')
+       SELECT 
+       cast(a.date AS DATE) as date,
+       cast(b.date AS DATE) as future_date,
        a.geo_id, 
        TRIM(a.series_id, a.geo_id) as sentences, 
        a.score as current_rank, 
@@ -246,6 +247,7 @@ def nlp_featurize_and_cluster(
     train_end: str,
     subcat_id: int,
     model_name: str,
+    n_clusters: int,
     override: str = 'False',
     project_id: str = 'cpg-cdp'
     ) -> NamedTuple('Outputs', [('term_cluster_table', str)]):
@@ -287,12 +289,14 @@ def nlp_featurize_and_cluster(
                 , arr[OFFSET(19)]    
             ));
 
-            CREATE OR REPLACE TABLE `{target_table}` as ( #
-                select * 
+            CREATE OR REPLACE TABLE `{target_table}` 
+            PARTITION BY RANGE_BUCKET(TOPIC_ID, GENERATE_ARRAY(0, {n_clusters}+1, 1)) 
+            as ( 
+                select * except(CENTROID_ID), CENTROID_ID as TOPIC_ID
                 from ML.PREDICT(MODEL `{model_name}`, (
                     select *, arr_to_input_20(output_0) AS comments_embed from 
                         ML.PREDICT(MODEL trendspotting.swivel_text_embed,(
-                      SELECT date, geo_name, term AS sentences, score
+                      SELECT cast(date AS DATE) as date, geo_name, term AS sentences, score
                       FROM `{source_table}`
                       WHERE date >= '{train_st}'
                       and category_id = {subcat_id}
@@ -341,7 +345,7 @@ def aggregate_clusters(
         WITH
           scored_trends AS (
           SELECT
-            centroid_id AS topic_id,
+            centroid_id as topic_id,
             terms,
             category
           FROM
@@ -379,7 +383,7 @@ def aggregate_clusters(
           SELECT
             score,
             a.date,
-            centroid_id,
+            TOPIC_ID,
             topic_id,
             category,
             a.comments_embed
@@ -859,7 +863,7 @@ def aggregate_clusters_basic(
             CREATE OR REPLACE TABLE {target_table} as (
             with centroids as (select * from 
             (SELECT
-            centroid_id, feature, numerical_value
+            centroid_id as topic_id, feature, numerical_value
             FROM
               ML.CENTROIDS(MODEL `trendspotting.embed_clustering_100`)
             )
@@ -884,15 +888,15 @@ def aggregate_clusters_basic(
             'comments_embed_p19',
             'comments_embed_p20'))
                               )
-            select score, date, b.*,
+            select score, CAST(date AS DATE) as date, b.*,
             case when date between '{train_st}' and  '{train_end}' then 'TRAIN'
                       when date between '{valid_st}' and '{valid_end}' then 'VALIDATE'
                      else 'TEST' end as split_col
             from (
-                select sum(score) as score, date, centroid_id 
-                from {source_table} group by date, centroid_id
+                select sum(score) as score, date, topic_id 
+                from {source_table} group by date, topic_id
             ) a
-            inner join centroids b on a.centroid_id = b.centroid_id
+            inner join centroids b on a.topic_id = b.topic_id
             )
           """
     )
@@ -944,3 +948,221 @@ def get_model_train_sql(model_name, n_clusters, source_table, train_st, subcat_i
                       and category_id = {subcat_id}
                       ))
     """
+
+
+
+### Alter schema statements and optimizations to tables
+
+@kfp.v2.dsl.component(
+  base_image='python:3.9',
+  packages_to_install=['google-cloud-bigquery==2.18.0', 
+                      'pytz'],
+)
+def alter_topmover_schema(
+    source_table: str,
+    override: str = 'False',
+    project_id: str = 'cpg-cdp'
+    ) -> None:
+    
+    from google.cloud import bigquery
+    import time
+
+    bq_client = bigquery.Client(project=project_id)
+    
+    queries = [
+        f"""ALTER TABLE `{source_table}`
+    SET OPTIONS (
+      description="Top mover table, this does a backtest by taking a snapshot of the keyword scores on the date in this table. They are then compared to predictions Vertex makes in the future date. Terms that have higher scores are than before are surfaced and sorted by the difference in score"
+    )""",
+    f"""ALTER TABLE `{source_table}`
+    ALTER COLUMN date
+    SET OPTIONS (
+      description="This is the date predicted_on is selected for the backtest. Treat all data after this date as blind and predicted by Vertex, except for the `six_mo_rank` which is actual to compare performance"
+    )""",
+    f"""ALTER TABLE `{source_table}`
+    ALTER COLUMN future_date
+    SET OPTIONS (
+      description="This is the date in the future with respect to the backtest date. Since this is a backtest, it is in the past. In production this would be predictions into the future"
+    )""",
+    f"""ALTER TABLE `{source_table}`
+    ALTER COLUMN sentences
+    SET OPTIONS (
+      description="The keyword a user types into google.com"
+    )""",
+    f"""ALTER TABLE `{source_table}`
+    ALTER COLUMN current_rank
+    SET OPTIONS (
+      description="The relative score of the keyword at time of `date`"
+    )""",
+    f"""ALTER TABLE `{source_table}`
+    ALTER COLUMN six_delta_rank
+    SET OPTIONS (
+      description="The difference between the `six_mo_rank` and `current_rank`"
+    )""",
+    f"""ALTER TABLE `{source_table}`
+    ALTER COLUMN six_mo_rank
+    SET OPTIONS (
+      description="The actual score of the keyword forecasted at `future_date`"
+    )""",
+    f"""ALTER TABLE `{source_table}`
+    ALTER COLUMN six_mo_forecast
+    SET OPTIONS (
+      description="The forecasted score from Vertex Forecast of the keyword forecasted at `future_date`"
+    )""",
+    f"""ALTER TABLE `{source_table}`
+    ALTER COLUMN geo_id
+    SET OPTIONS (
+      description="The geographic designation of the user. For US, typically this is DMA. Outside US it is either country or region"
+    )""",
+              ]
+    for query in queries:
+        bq_client.query(query)
+        time.sleep(2)
+        
+@kfp.v2.dsl.component(
+  base_image='python:3.9',
+  packages_to_install=['google-cloud-bigquery==2.18.0', 
+                      'pytz'],
+)       
+def alter_basic_cluster_forecast_table(
+    source_table: str,
+    override: str = 'False',
+    project_id: str = 'cpg-cdp'
+    ) -> None:
+    
+    from google.cloud import bigquery
+    import time
+
+    bq_client = bigquery.Client(project=project_id)
+    
+    queries = [
+           f"""ALTER TABLE `{source_table}`
+    SET OPTIONS (
+      description="Basic Clustering Forecast Table - this table shows a foreast for the keyword clusters generated by k-means. Note this is not using custom categories, which allow users to specify keyword categories, the algorithm is unsupervised and clusters based on NLP embeddings"
+    )""",
+    f"""ALTER TABLE `{source_table}`
+    ALTER COLUMN topic_id
+    SET OPTIONS (
+      description="The cluster ID assigned by the BQML k-means algorithm. Note the number in the table name designates the number of term clusters"
+    )""",
+    f"""ALTER TABLE `{source_table}`
+    ALTER COLUMN date
+    SET OPTIONS (
+      description="Date for the keyword"
+    )""",
+    f"""ALTER TABLE `{source_table}`
+    ALTER COLUMN predicted_on_date
+    SET OPTIONS (
+      description="This is an output from Vertex Forecast. When a model is created it creates scenarios to test 'what-if' on various days in the past. To understand the data, you typically pick a predict_on_date as a filter to then see what the predictions looked like as of that date"
+    )""",
+    f"""ALTER TABLE `{source_table}`
+    ALTER COLUMN predicted_score
+    SET OPTIONS (
+      description="This is the output of Vertex Forecast. It is the predicted score over the test time period (i.e. backtest)"
+    )""",
+    f"""ALTER TABLE `{source_table}`
+    ALTER COLUMN score
+    SET OPTIONS (
+      description="This is the actual score. Used for comparing actual vs predicted and used by Vertex AI to create predictions"
+    )"""
+            ]
+    for query in queries:
+        bq_client.query(query)
+        time.sleep(2)
+        
+        
+@kfp.v2.dsl.component(
+  base_image='python:3.9',
+  packages_to_install=['google-cloud-bigquery==2.18.0', 
+                      'pytz'],
+)       
+def alter_basic_cluster_term_table(
+    source_table: str,
+    override: str = 'False',
+    project_id: str = 'cpg-cdp'
+    ) -> None:
+    
+    from google.cloud import bigquery
+    import time
+
+    bq_client = bigquery.Client(project=project_id)
+    
+    queries = [
+               f"""ALTER TABLE `{source_table}`
+    SET OPTIONS (
+      description="This table contains a cross reference of the keywords and cluster IDs. Use this to explore the keywords that make up the clusters identified with BQML k-means"
+    )""",
+    f"""ALTER TABLE `{source_table}`
+    ALTER COLUMN topic_id
+    SET OPTIONS (
+      description="Cluster ID created by BQML K-means. The number in the table name indicates how many clusters are in the table"
+    )""",
+    f"""ALTER TABLE `{source_table}`
+    ALTER COLUMN NEAREST_CENTROIDS_DISTANCE
+    SET OPTIONS (
+      description="The closest distance shows the distance of the given row/keyword from the various cluster centers. The closest cluster gets assigned to CENTROID_ID"
+    )""",
+    f"""ALTER TABLE `{source_table}`
+    ALTER COLUMN output_0
+    SET OPTIONS (
+      description="Vector format of the embeddings. These are transposed to the comments_embed struct so they can be read by the model. These come from tf.hub universal sentence encoder NLP model https://tfhub.dev/google/collections/universal-sentence-encoder/1"
+    )""",
+    f"""ALTER TABLE `{source_table}`
+    ALTER COLUMN date SET DATA TYPE DATE
+    SET OPTIONS (
+      description="The date corrleating to the ranked keyword"
+    )""",
+    f"""ALTER TABLE `{source_table}`
+    ALTER COLUMN geo_name
+    SET OPTIONS (
+      description="The geographic designator for the keyword. In US, this is typically DMA, and is usually country code otherwise. Can be down to region as well"
+    )""",
+    f"""ALTER TABLE `{source_table}`
+    ALTER COLUMN sentences
+    SET OPTIONS (
+      description="The keywords users type into google.com"
+    )""",
+    f"""ALTER TABLE `{source_table}`
+    ALTER COLUMN score
+    SET OPTIONS (
+      description="The relative score of the keyword rank over time. This is indexed so insights are all relative to the dataset"
+    )""",
+    f"""ALTER TABLE `{source_table}`
+    ALTER COLUMN comments_embed
+    SET OPTIONS (
+      description="See output_0. This is a transposed struct of the embedding arrays"
+    )""",
+            ]
+    for query in queries:
+        bq_client.query(query)
+        time.sleep(2)
+
+        
+@kfp.v2.dsl.component(
+  base_image='python:3.9',
+  packages_to_install=['google-cloud-bigquery==2.18.0', 
+                      'pytz'],
+)  
+def create_partitioned_forecast_table(
+    source_table: str,
+    target_table: str,
+    override: str = 'False',
+    project_id: str = 'cpg-cdp'
+    ) -> None:
+    
+    from google.cloud import bigquery
+
+    bq_client = bigquery.Client(project=project_id)
+    
+    query = f"""CREATE OR REPLACE TABLE `{target_table}`  
+                PARTITION BY date
+                as
+                (
+               SELECT CAST(date AS DATE) as date,
+               CAST(predicted_on_date AS DATE) as predicted_on_date,
+               predicted_score,
+               score,
+               CAST(topic_id as INT64) as topic_id
+               from `{source_table}`)
+               """
+    bq_client.query(query).result()
