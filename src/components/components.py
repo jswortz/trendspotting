@@ -67,9 +67,9 @@ def create_prediction_dataset_term_level(
             arr_to_input_20(output_0) as embed
         FROM ML.PREDICT(MODEL trendspotting.swivel_text_embed,
         (
-          SELECT date, geo_id, term AS sentences, score, concat( term, geo_id) as series_id
+          SELECT date, geo_id, term AS sentences, concat(term, geo_id) as series_id,  SUM(score) as score
           FROM `{source_table_uri}` where category_id = {subcat_id} and date > "{train_st}"
-        ))      
+        GROUP BY 1, 2, 3, 4))      
         )
           """
     )
@@ -942,10 +942,11 @@ def get_model_train_sql(model_name, n_clusters, source_table, train_st, subcat_i
             CREATE OR REPLACE MODEL `{model_name}` OPTIONS(model_type='kmeans', KMEANS_INIT_METHOD='KMEANS++', num_clusters={n_clusters}) AS
                     select arr_to_input_20(output_0) AS comments_embed from 
                         ML.PREDICT(MODEL trendspotting.swivel_text_embed,(
-                      SELECT date, geo_name, term AS sentences, score
+                      SELECT date, geo_name, term AS sentences, SUM(score) as score
                       FROM `{source_table}`
                       WHERE date >= '{train_st}'
                       and category_id = {subcat_id}
+                      GROUP BY 1, 2, 3
                       ))
     """
 
@@ -1166,3 +1167,66 @@ def create_partitioned_forecast_table(
                from `{source_table}`)
                """
     bq_client.query(query).result()
+
+    
+######NEW 12-2022 TOP-RISER REPORT
+
+@kfp.v2.dsl.component(
+  base_image='python:3.9',
+  packages_to_install=['google-cloud-bigquery==2.18.0', 
+                      'pytz'],
+)
+def sustained_riser_report(
+    source_table: str,
+    target_table: str,
+    top_n: int,
+    predicted_on_dt: str,
+    override: str = 'False',
+    project_id: str = 'cpg-cdp'
+    ) -> NamedTuple('Outputs', [('top_riser_table', str)]):
+    
+    from google.cloud import bigquery
+
+    bq_client = bigquery.Client(project=project_id)
+    (
+    bq_client.query(
+      f"""
+            CREATE OR REPLACE TABLE {target_table} as (
+            WITH
+              forecasted_difference_table AS (
+              SELECT
+                series_id,
+                date,
+                predicted_score.value AS forecasted_score,
+                score,
+                LAG(predicted_score.value) OVER (PARTITION BY series_id ORDER BY date) - predicted_score.value AS forecasted_difference
+              FROM
+                `{source_table}`
+              WHERE
+                predicted_on_date = '{predicted_on_dt}'
+              ORDER BY
+                series_id,
+                date ASC)
+            SELECT
+              b.*
+            FROM (
+              SELECT
+                series_id,
+                AVG(forecasted_difference) AS avg_rise
+              FROM
+                forecasted_difference_table
+              GROUP BY
+                series_id  ORDER BY
+              2 DESC
+            LIMIT
+              {top_n}) a, `{source_table}` b WHERE b.predicted_on_date = '{predicted_on_dt}' and a.series_id = b.series_id
+           
+            )
+          """
+    )
+    .result()
+    )
+
+    return (
+    f'{target_table}',
+    )

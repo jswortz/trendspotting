@@ -1076,7 +1076,7 @@
                   "data_granularity_unit": {
                     "runtimeValue": {
                       "constantValue": {
-                        "stringValue": "day"
+                        "stringValue": "week"
                       }
                     }
                   },
@@ -1237,7 +1237,7 @@
                   "query": {
                     "runtimeValue": {
                       "constantValue": {
-                        "stringValue": "CREATE TEMPORARY FUNCTION arr_to_input_20(arr ARRAY<FLOAT64>)\n                        RETURNS \n                        STRUCT<p1 FLOAT64, p2 FLOAT64, p3 FLOAT64, p4 FLOAT64,\n                               p5 FLOAT64, p6 FLOAT64, p7 FLOAT64, p8 FLOAT64, \n                               p9 FLOAT64, p10 FLOAT64, p11 FLOAT64, p12 FLOAT64, \n                               p13 FLOAT64, p14 FLOAT64, p15 FLOAT64, p16 FLOAT64,\n                               p17 FLOAT64, p18 FLOAT64, p19 FLOAT64, p20 FLOAT64>\n                        AS (\n                        STRUCT(\n                            arr[OFFSET(0)]\n                            , arr[OFFSET(1)]\n                            , arr[OFFSET(2)]\n                            , arr[OFFSET(3)]\n                            , arr[OFFSET(4)]\n                            , arr[OFFSET(5)]\n                            , arr[OFFSET(6)]\n                            , arr[OFFSET(7)]\n                            , arr[OFFSET(8)]\n                            , arr[OFFSET(9)]\n                            , arr[OFFSET(10)]\n                            , arr[OFFSET(11)]\n                            , arr[OFFSET(12)]\n                            , arr[OFFSET(13)]\n                            , arr[OFFSET(14)]\n                            , arr[OFFSET(15)]\n                            , arr[OFFSET(16)]\n                            , arr[OFFSET(17)]\n                            , arr[OFFSET(18)]\n                            , arr[OFFSET(19)]    \n                        ));\n                        \n            CREATE OR REPLACE MODEL `{{$.inputs.parameters['pipelineparam--model_name']}}` OPTIONS(model_type='kmeans', KMEANS_INIT_METHOD='KMEANS++', num_clusters={{$.inputs.parameters['pipelineparam--n_clusters']}}) AS\n                    select arr_to_input_20(output_0) AS comments_embed from \n                        ML.PREDICT(MODEL trendspotting.swivel_text_embed,(\n                      SELECT date, geo_name, term AS sentences, score\n                      FROM `{{$.inputs.parameters['pipelineparam--source_table']}}`\n                      WHERE date >= '{{$.inputs.parameters['pipelineparam--train_st']}}'\n                      and category_id = {{$.inputs.parameters['pipelineparam--subcat_id']}}\n                      ))\n    "
+                        "stringValue": "CREATE TEMPORARY FUNCTION arr_to_input_20(arr ARRAY<FLOAT64>)\n                        RETURNS \n                        STRUCT<p1 FLOAT64, p2 FLOAT64, p3 FLOAT64, p4 FLOAT64,\n                               p5 FLOAT64, p6 FLOAT64, p7 FLOAT64, p8 FLOAT64, \n                               p9 FLOAT64, p10 FLOAT64, p11 FLOAT64, p12 FLOAT64, \n                               p13 FLOAT64, p14 FLOAT64, p15 FLOAT64, p16 FLOAT64,\n                               p17 FLOAT64, p18 FLOAT64, p19 FLOAT64, p20 FLOAT64>\n                        AS (\n                        STRUCT(\n                            arr[OFFSET(0)]\n                            , arr[OFFSET(1)]\n                            , arr[OFFSET(2)]\n                            , arr[OFFSET(3)]\n                            , arr[OFFSET(4)]\n                            , arr[OFFSET(5)]\n                            , arr[OFFSET(6)]\n                            , arr[OFFSET(7)]\n                            , arr[OFFSET(8)]\n                            , arr[OFFSET(9)]\n                            , arr[OFFSET(10)]\n                            , arr[OFFSET(11)]\n                            , arr[OFFSET(12)]\n                            , arr[OFFSET(13)]\n                            , arr[OFFSET(14)]\n                            , arr[OFFSET(15)]\n                            , arr[OFFSET(16)]\n                            , arr[OFFSET(17)]\n                            , arr[OFFSET(18)]\n                            , arr[OFFSET(19)]    \n                        ));\n                        \n            CREATE OR REPLACE MODEL `{{$.inputs.parameters['pipelineparam--model_name']}}` OPTIONS(model_type='kmeans', KMEANS_INIT_METHOD='KMEANS++', num_clusters={{$.inputs.parameters['pipelineparam--n_clusters']}}) AS\n                    select arr_to_input_20(output_0) AS comments_embed from \n                        ML.PREDICT(MODEL trendspotting.swivel_text_embed,(\n                      SELECT date, geo_name, term AS sentences, SUM(score) as score\n                      FROM `{{$.inputs.parameters['pipelineparam--source_table']}}`\n                      WHERE date >= '{{$.inputs.parameters['pipelineparam--train_st']}}'\n                      and category_id = {{$.inputs.parameters['pipelineparam--subcat_id']}}\n                      GROUP BY 1, 2, 3\n                      ))\n    "
                       }
                     }
                   },
@@ -1660,6 +1660,38 @@
         "outputDefinitions": {
           "parameters": {
             "term_train_table": {
+              "type": "STRING"
+            }
+          }
+        }
+      },
+      "comp-sustained-riser-report": {
+        "executorLabel": "exec-sustained-riser-report",
+        "inputDefinitions": {
+          "parameters": {
+            "override": {
+              "type": "STRING"
+            },
+            "predicted_on_dt": {
+              "type": "STRING"
+            },
+            "project_id": {
+              "type": "STRING"
+            },
+            "source_table": {
+              "type": "STRING"
+            },
+            "target_table": {
+              "type": "STRING"
+            },
+            "top_n": {
+              "type": "INT"
+            }
+          }
+        },
+        "outputDefinitions": {
+          "parameters": {
+            "top_riser_table": {
               "type": "STRING"
             }
           }
@@ -2179,7 +2211,7 @@
               "sh",
               "-ec",
               "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
-              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef create_prediction_dataset_term_level(\n      target_table: str,\n      source_table_uri: str,\n      train_st: str,\n      train_end: str,\n      valid_st: str,\n      valid_end: str,\n      subcat_id: int,\n      override: str = 'False',\n      project_id: str = 'cpg-cdp'\n    ) -> NamedTuple('Outputs', [('training_data_table_uri', str)]):\n\n    from google.cloud import bigquery\n\n    override = bool(override)\n    bq_client = bigquery.Client(project=project_id)\n    (\n    bq_client.query(\n      f\"\"\"CREATE TEMPORARY FUNCTION arr_to_input_20(arr ARRAY<FLOAT64>)\n        RETURNS \n        STRUCT<p1 FLOAT64, p2 FLOAT64, p3 FLOAT64, p4 FLOAT64,\n               p5 FLOAT64, p6 FLOAT64, p7 FLOAT64, p8 FLOAT64, \n               p9 FLOAT64, p10 FLOAT64, p11 FLOAT64, p12 FLOAT64, \n               p13 FLOAT64, p14 FLOAT64, p15 FLOAT64, p16 FLOAT64,\n               p17 FLOAT64, p18 FLOAT64, p19 FLOAT64, p20 FLOAT64>\n        AS (\n        STRUCT(\n            arr[OFFSET(0)]\n            , arr[OFFSET(1)]\n            , arr[OFFSET(2)]\n            , arr[OFFSET(3)]\n            , arr[OFFSET(4)]\n            , arr[OFFSET(5)]\n            , arr[OFFSET(6)]\n            , arr[OFFSET(7)]\n            , arr[OFFSET(8)]\n            , arr[OFFSET(9)]\n            , arr[OFFSET(10)]\n            , arr[OFFSET(11)]\n            , arr[OFFSET(12)]\n            , arr[OFFSET(13)]\n            , arr[OFFSET(14)]\n            , arr[OFFSET(15)]\n            , arr[OFFSET(16)]\n            , arr[OFFSET(17)]\n            , arr[OFFSET(18)]\n            , arr[OFFSET(19)]    \n        ));\n\n\n        CREATE OR REPLACE TABLE `{target_table}` as (\n            SELECT * except(output_0), case when date between \"{train_st}\" and \"{train_end}\" then 'TRAIN'\n                  when date between \"{valid_st}\" and \"{valid_end}\" then 'VALIDATE'\n                 else 'TEST' end as split_col,\n            arr_to_input_20(output_0) as embed\n        FROM ML.PREDICT(MODEL trendspotting.swivel_text_embed,\n        (\n          SELECT date, geo_id, term AS sentences, score, concat( term, geo_id) as series_id\n          FROM `{source_table_uri}` where category_id = {subcat_id} and date > \"{train_st}\"\n        ))      \n        )\n          \"\"\"\n    )\n    .result()\n    )\n\n    return (\n    f'{target_table}',\n    )\n\n"
+              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef create_prediction_dataset_term_level(\n      target_table: str,\n      source_table_uri: str,\n      train_st: str,\n      train_end: str,\n      valid_st: str,\n      valid_end: str,\n      subcat_id: int,\n      override: str = 'False',\n      project_id: str = 'cpg-cdp'\n    ) -> NamedTuple('Outputs', [('training_data_table_uri', str)]):\n\n    from google.cloud import bigquery\n\n    override = bool(override)\n    bq_client = bigquery.Client(project=project_id)\n    (\n    bq_client.query(\n      f\"\"\"CREATE TEMPORARY FUNCTION arr_to_input_20(arr ARRAY<FLOAT64>)\n        RETURNS \n        STRUCT<p1 FLOAT64, p2 FLOAT64, p3 FLOAT64, p4 FLOAT64,\n               p5 FLOAT64, p6 FLOAT64, p7 FLOAT64, p8 FLOAT64, \n               p9 FLOAT64, p10 FLOAT64, p11 FLOAT64, p12 FLOAT64, \n               p13 FLOAT64, p14 FLOAT64, p15 FLOAT64, p16 FLOAT64,\n               p17 FLOAT64, p18 FLOAT64, p19 FLOAT64, p20 FLOAT64>\n        AS (\n        STRUCT(\n            arr[OFFSET(0)]\n            , arr[OFFSET(1)]\n            , arr[OFFSET(2)]\n            , arr[OFFSET(3)]\n            , arr[OFFSET(4)]\n            , arr[OFFSET(5)]\n            , arr[OFFSET(6)]\n            , arr[OFFSET(7)]\n            , arr[OFFSET(8)]\n            , arr[OFFSET(9)]\n            , arr[OFFSET(10)]\n            , arr[OFFSET(11)]\n            , arr[OFFSET(12)]\n            , arr[OFFSET(13)]\n            , arr[OFFSET(14)]\n            , arr[OFFSET(15)]\n            , arr[OFFSET(16)]\n            , arr[OFFSET(17)]\n            , arr[OFFSET(18)]\n            , arr[OFFSET(19)]    \n        ));\n\n\n        CREATE OR REPLACE TABLE `{target_table}` as (\n            SELECT * except(output_0), case when date between \"{train_st}\" and \"{train_end}\" then 'TRAIN'\n                  when date between \"{valid_st}\" and \"{valid_end}\" then 'VALIDATE'\n                 else 'TEST' end as split_col,\n            arr_to_input_20(output_0) as embed\n        FROM ML.PREDICT(MODEL trendspotting.swivel_text_embed,\n        (\n          SELECT date, geo_id, term AS sentences, concat(term, geo_id) as series_id,  SUM(score) as score\n          FROM `{source_table_uri}` where category_id = {subcat_id} and date > \"{train_st}\"\n        GROUP BY 1, 2, 3, 4))      \n        )\n          \"\"\"\n    )\n    .result()\n    )\n\n    return (\n    f'{target_table}',\n    )\n\n"
             ],
             "image": "python:3.9"
           }
@@ -2280,6 +2312,26 @@
               "-ec",
               "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
               "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef prep_forecast_term_level_drop_embeddings(\n    source_table: str,\n    target_table: str,\n    override: str = 'False',\n    project_id: str = 'cpg-cdp'\n    ) -> NamedTuple('Outputs', [('term_train_table', str)]):\n\n    from google.cloud import bigquery\n\n    bq_client = bigquery.Client(project=project_id)\n\n    source_table_no_bq = str(source_table).strip('bq://')\n\n    (\n    bq_client.query(\n      f\"\"\"\n            CREATE OR REPLACE TABLE `{target_table}` as (\n        SELECT * \n        except(\n        emb1, \n        emb2,\n        emb3,\n        emb4,\n        emb5,\n        emb6,\n        emb7,\n        emb8,\n        emb9,\n        emb10,\n        emb11,\n        emb12,\n        emb13,\n        emb14,\n        emb15,\n        emb16,\n        emb17,\n        emb18,\n        emb19,\n        emb20)\n\n        FROM `{source_table_no_bq}` )\n          \"\"\"\n    )\n    .result()\n    )\n\n    return (\n    f'bq://{target_table}',\n    )\n\n"
+            ],
+            "image": "python:3.9"
+          }
+        },
+        "exec-sustained-riser-report": {
+          "container": {
+            "args": [
+              "--executor_input",
+              "{{$}}",
+              "--function_to_execute",
+              "sustained_riser_report"
+            ],
+            "command": [
+              "sh",
+              "-c",
+              "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet     --no-warn-script-location 'google-cloud-bigquery==2.18.0' 'pytz' 'kfp==1.8.12' && \"$0\" \"$@\"\n",
+              "sh",
+              "-ec",
+              "program_path=$(mktemp -d)\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\npython3 -m kfp.v2.components.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+              "\nimport kfp\nfrom kfp.v2 import dsl\nfrom kfp.v2.dsl import *\nfrom typing import *\n\ndef sustained_riser_report(\n    source_table: str,\n    target_table: str,\n    top_n: int,\n    predicted_on_dt: str,\n    override: str = 'False',\n    project_id: str = 'cpg-cdp'\n    ) -> NamedTuple('Outputs', [('top_riser_table', str)]):\n\n    from google.cloud import bigquery\n\n    source_table_no_bq = source_table.strip('bq://')\n\n    target_bq_table = 'bq://' + target_table\n\n    bq_client = bigquery.Client(project=project_id)\n    (\n    bq_client.query(\n      f\"\"\"\n            CREATE OR REPLACE TABLE {target_table} as (\n            WITH\n              forecasted_difference_table AS (\n              SELECT\n                series_id,\n                date,\n                predicted_score.value AS forecasted_score,\n                score,\n                LAG(predicted_score.value) OVER (PARTITION BY series_id ORDER BY date) - predicted_score.value AS forecasted_difference\n              FROM\n                `{source_table}`\n              WHERE\n                predicted_on_date = '{predicted_on_dt}'\n              ORDER BY\n                series_id,\n                date ASC)\n            SELECT\n              b.*\n            FROM (\n              SELECT\n                series_id,\n                AVG(forecasted_difference) AS avg_rise\n              FROM\n                forecasted_difference_table\n              GROUP BY\n                series_id  ORDER BY\n              2 DESC\n            LIMIT\n              {top_n}) a, `{source_table}` b WHERE b.predicted_on_date = '{predicted_on_dt}' and a.series_id = b.series_id\n\n            )\n          \"\"\"\n    )\n    .result()\n    )\n\n    return (\n    f'{target_table}',\n    )\n\n"
             ],
             "image": "python:3.9"
           }
@@ -2397,7 +2449,7 @@
       }
     },
     "pipelineInfo": {
-      "name": "cusines-thailand-trendspotting-pipeline-v6"
+      "name": "cuisines-10889-malaysia-2458-trendspotting-pipeline-v7"
     },
     "root": {
       "dag": {
@@ -2487,7 +2539,7 @@
                 "data_granularity_unit": {
                   "runtimeValue": {
                     "constantValue": {
-                      "stringValue": "day"
+                      "stringValue": "week"
                     }
                   }
                 },
@@ -2809,7 +2861,7 @@
                 "target_table": {
                   "runtimeValue": {
                     "constantValue": {
-                      "stringValue": "{{$.inputs.parameters['pipelineparam--vertex_project']}}.trends_pipeline.ETL_futurama_weekly_embed_cusines-thailand"
+                      "stringValue": "{{$.inputs.parameters['pipelineparam--vertex_project']}}.trends_pipeline.cuisines_10889_malaysia_2458_ETL_futurama_weekly_embed"
                     }
                   }
                 },
@@ -2989,6 +3041,50 @@
               "name": "Dropping embeddings for point level forecasting"
             }
           },
+          "sustained-riser-report": {
+            "cachingOptions": {
+              "enableCache": true
+            },
+            "componentRef": {
+              "name": "comp-sustained-riser-report"
+            },
+            "dependentTasks": [
+              "automl-forecasting-training-job"
+            ],
+            "inputs": {
+              "parameters": {
+                "override": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": "False"
+                    }
+                  }
+                },
+                "predicted_on_dt": {
+                  "componentInputParameter": "predict_on_dt"
+                },
+                "project_id": {
+                  "runtimeValue": {
+                    "constantValue": {
+                      "stringValue": "cpg-cdp"
+                    }
+                  }
+                },
+                "source_table": {
+                  "componentInputParameter": "target_term_forecast_table"
+                },
+                "target_table": {
+                  "componentInputParameter": "sustained_riser_table"
+                },
+                "top_n": {
+                  "componentInputParameter": "top_n_results"
+                }
+              }
+            },
+            "taskInfo": {
+              "name": "Create Sustained Riser Table"
+            }
+          },
           "time-series-dataset-create": {
             "cachingOptions": {
               "enableCache": true
@@ -3122,6 +3218,9 @@
           },
           "subcat_id": {
             "type": "INT"
+          },
+          "sustained_riser_table": {
+            "type": "STRING"
           },
           "target_cluster_forecast_table": {
             "type": "STRING"
