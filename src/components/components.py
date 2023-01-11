@@ -67,7 +67,7 @@ def create_prediction_dataset_term_level(
             arr_to_input_20(output_0) as embed
         FROM ML.PREDICT(MODEL trendspotting.swivel_text_embed,
         (
-          SELECT date, geo_id, term AS sentences, concat(term, geo_id) as series_id,  SUM(score) as score
+          SELECT date, geo_id, term AS sentences, concat(term, geo_id) as series_id,  SUM(score) * 10000 as score
           FROM `{source_table_uri}` where category_id = {subcat_id} and date > "{train_st}"
         GROUP BY 1, 2, 3, 4))      
         )
@@ -535,6 +535,11 @@ COLUMN_TRANSFORMATIONS = [
       "columnName": "score"
     }
   },
+  {
+    "text": {
+      "columnName": "sentences"
+    }
+  }
 ]
 
 
@@ -942,7 +947,7 @@ def get_model_train_sql(model_name, n_clusters, source_table, train_st, subcat_i
             CREATE OR REPLACE MODEL `{model_name}` OPTIONS(model_type='kmeans', KMEANS_INIT_METHOD='KMEANS++', num_clusters={n_clusters}) AS
                     select arr_to_input_20(output_0) AS comments_embed from 
                         ML.PREDICT(MODEL trendspotting.swivel_text_embed,(
-                      SELECT date, geo_name, term AS sentences, SUM(score) as score
+                      SELECT date, geo_name, term AS sentences, SUM(score) * 10000 as score
                       FROM `{source_table}`
                       WHERE date >= '{train_st}'
                       and category_id = {subcat_id}
