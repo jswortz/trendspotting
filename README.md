@@ -1,4 +1,20 @@
 # trendspotting
 
-Link to repo introduction by Google to WT:
-https://wppcloud.sharepoint.com/sites/WT-P-C-Nestle/_layouts/15/stream.aspx?id=%2Fsites%2FWT%2DP%2DC%2DNestle%2FShared%20Documents%2F03%20Projects%2F01%20Nestl%C3%A9%20Global%2F2023%2FCloud%2F356750%5FNestl%C3%A9%5FGlobal%5FeBusiness%5FCloud%5FCategory%2DSearch%2DForecast%5F2023%2F03%20Discover%20%26%20Define%2F01%20Material%20from%20Google%20%2D%20Coffee%20Search%20Dashboard%2FGoogle%20X%20WT%20MAP%5F%20trendspotting%20Git%20repo%2D20230719%5F170536%2DMeeting%20Recording%2Emp4
+__________________
+## Limitations and Licensing
+
+All code in this repository is for demonstration purposes only.
+
+This code is not an official Google product, nor is it part of an official Google product.non-production demo/example code or infrastructure automation scripts
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
