@@ -1,4 +1,4 @@
-# trendspotting
+# Trendspotting
 
 __________________
 ## Limitations and Licensing
@@ -18,3 +18,29 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
+__________________
+## Overview
+This project provides an implementation of Trendspotting on Google Cloud.
+
+## Use Cases
+
+![diagram](./img/use_cases.png)
+
+## How it Works
+
+![diagram](./img/how_it_works.png)
+
+## Architecture Design
+
+Simple Trendspotting architecture on Google Cloud 
+
+![diagram](./img/architecture_1.png)
+
+Trendspotting Data & ML Orchestration architecture on Google Cloud 
+
+![diagram](./img/architecture_2.png)
+
+Generative AI Trendspotting architecture on Google Cloud 
+
+![diagram](./img/architecture_3.png)
