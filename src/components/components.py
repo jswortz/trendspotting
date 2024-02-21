@@ -1,104 +1,102 @@
 import kfp
-from typing import Dict, List, Optional, Sequence, Tuple, Union
-from kfp.v2.dsl import Artifact
-from kfp.v2.dsl import Input, Model
-from kfp.v2.components.types.type_utils import artifact_types
-from typing import Any, Callable, Dict, NamedTuple, Optional
+from kfp.dsl import Artifact
+from kfp.dsl import Input
+from typing import NamedTuple
 
 
-@kfp.v2.dsl.component(
-  base_image='python:3.9',
-  packages_to_install=['google-cloud-bigquery==2.18.0','pytz'],
+@kfp.dsl.component(
+    base_image="python:3.9",
+    packages_to_install=["google-cloud-bigquery==2.18.0", "pytz"],
 )
 def create_prediction_dataset_term_level(
-      target_table: str,
-      source_table_uri: str,
-      train_st: str,
-      train_end: str,
-      valid_st: str,
-      valid_end: str,
-      subcat_id: int,
-      override: str = 'False',
-      project_id: str = 'cpg-cdp'
-    ) -> NamedTuple('Outputs', [('training_data_table_uri', str)]):
-    
+    target_table: str,
+    source_table_uri: str,
+    train_st: str,
+    train_end: str,
+    valid_st: str,
+    valid_end: str,
+    subcat_id: int,
+    override: str = "False",
+    project_id: str = "cpg-cdp",
+) -> NamedTuple("Outputs", [("training_data_table_uri", str)]):
+    """This component takes in a source table and creates a new table with the following columns:
+    date, geo_id, term, score, split_col (TRAIN, VALIDATE, TEST)
+    """
+
     from google.cloud import bigquery
- 
+
     override = bool(override)
     bq_client = bigquery.Client(project=project_id)
     (
-    bq_client.query(
-      f"""CREATE TEMPORARY FUNCTION arr_to_input_20(arr ARRAY<FLOAT64>)
-        RETURNS 
-        STRUCT<p1 FLOAT64, p2 FLOAT64, p3 FLOAT64, p4 FLOAT64,
-               p5 FLOAT64, p6 FLOAT64, p7 FLOAT64, p8 FLOAT64, 
-               p9 FLOAT64, p10 FLOAT64, p11 FLOAT64, p12 FLOAT64, 
-               p13 FLOAT64, p14 FLOAT64, p15 FLOAT64, p16 FLOAT64,
-               p17 FLOAT64, p18 FLOAT64, p19 FLOAT64, p20 FLOAT64>
-        AS (
-        STRUCT(
-            arr[OFFSET(0)]
-            , arr[OFFSET(1)]
-            , arr[OFFSET(2)]
-            , arr[OFFSET(3)]
-            , arr[OFFSET(4)]
-            , arr[OFFSET(5)]
-            , arr[OFFSET(6)]
-            , arr[OFFSET(7)]
-            , arr[OFFSET(8)]
-            , arr[OFFSET(9)]
-            , arr[OFFSET(10)]
-            , arr[OFFSET(11)]
-            , arr[OFFSET(12)]
-            , arr[OFFSET(13)]
-            , arr[OFFSET(14)]
-            , arr[OFFSET(15)]
-            , arr[OFFSET(16)]
-            , arr[OFFSET(17)]
-            , arr[OFFSET(18)]
-            , arr[OFFSET(19)]    
-        ));
+        bq_client.query(
+            f"""CREATE TEMPORARY FUNCTION arr_to_input_20(arr ARRAY<FLOAT64>)
+          RETURNS 
+          STRUCT<p1 FLOAT64, p2 FLOAT64, p3 FLOAT64, p4 FLOAT64,
+                p5 FLOAT64, p6 FLOAT64, p7 FLOAT64, p8 FLOAT64, 
+                p9 FLOAT64, p10 FLOAT64, p11 FLOAT64, p12 FLOAT64, 
+                p13 FLOAT64, p14 FLOAT64, p15 FLOAT64, p16 FLOAT64,
+                p17 FLOAT64, p18 FLOAT64, p19 FLOAT64, p20 FLOAT64>
+          AS (
+          STRUCT(
+              arr[OFFSET(0)]
+              , arr[OFFSET(1)]
+              , arr[OFFSET(2)]
+              , arr[OFFSET(3)]
+              , arr[OFFSET(4)]
+              , arr[OFFSET(5)]
+              , arr[OFFSET(6)]
+              , arr[OFFSET(7)]
+              , arr[OFFSET(8)]
+              , arr[OFFSET(9)]
+              , arr[OFFSET(10)]
+              , arr[OFFSET(11)]
+              , arr[OFFSET(12)]
+              , arr[OFFSET(13)]
+              , arr[OFFSET(14)]
+              , arr[OFFSET(15)]
+              , arr[OFFSET(16)]
+              , arr[OFFSET(17)]
+              , arr[OFFSET(18)]
+              , arr[OFFSET(19)]    
+          ));
 
 
-        CREATE OR REPLACE TABLE `{target_table}` as (
-            SELECT * except(output_0), case when date between "{train_st}" and "{train_end}" then 'TRAIN'
-                  when date between "{valid_st}" and "{valid_end}" then 'VALIDATE'
-                 else 'TEST' end as split_col,
-            arr_to_input_20(output_0) as embed
-        FROM ML.PREDICT(MODEL trendspotting.swivel_text_embed,
-        (
-          SELECT date, geo_id, term AS sentences, concat(term, geo_id) as series_id,  SUM(score) * 10000 as score
-          FROM `{source_table_uri}` where category_id = {subcat_id} and date > "{train_st}"
-        GROUP BY 1, 2, 3, 4))      
-        )
-          """
-    )
-    .result()
-    )
-
-    return (
-    f'{target_table}',
+          CREATE OR REPLACE TABLE `{target_table}` as (
+              SELECT * except(output_0), case when date between "{train_st}" and "{train_end}" then 'TRAIN'
+                    when date between "{valid_st}" and "{valid_end}" then 'VALIDATE'
+                  else 'TEST' end as split_col,
+              arr_to_input_20(output_0) as embed
+          FROM ML.PREDICT(MODEL trendspotting.swivel_text_embed,
+          (
+            SELECT date, geo_id, term AS sentences, concat(term, geo_id) as series_id,  SUM(score) * 10000 as score
+            FROM `{source_table_uri}` where category_id = {subcat_id} and date > "{train_st}"
+          GROUP BY 1, 2, 3, 4))      
+          )
+            """
+        ).result()
     )
 
+    return (f"{target_table}",)
 
-@kfp.v2.dsl.component(
-  base_image='python:3.9',
-  packages_to_install=['google-cloud-bigquery==2.18.0','pytz'],
+
+@kfp.dsl.component(
+    base_image="python:3.9",
+    packages_to_install=["google-cloud-bigquery==2.18.0", "pytz"],
 )
 def prep_forecast_term_level(
     source_table: str,
     target_table: str,
-    override: str = 'False',
-    project_id: str = 'cpg-cdp'
-    ) -> NamedTuple('Outputs', [('term_train_table', str)]):
-    
+    override: str = "False",
+    project_id: str = "cpg-cdp",
+) -> NamedTuple("Outputs", [("term_train_table", str)]):
+
     from google.cloud import bigquery
 
     bq_client = bigquery.Client(project=project_id)
-    source_table_no_bq = source_table.strip('bq://')
+    source_table_no_bq = source_table.strip("bq://")
     (
-    bq_client.query(
-      f"""
+        bq_client.query(
+            f"""
             CREATE OR REPLACE TABLE `{target_table}` as (
         SELECT * except(embed), 
         embed.p1 as emb1, 
@@ -124,34 +122,32 @@ def prep_forecast_term_level(
 
         FROM `{source_table_no_bq}` )
           """
-    )
-    .result()
-    )
-
-    return (
-    f'bq://{target_table}',
+        ).result()
     )
 
-@kfp.v2.dsl.component(
-  base_image='python:3.9',
-  packages_to_install=['google-cloud-bigquery==2.18.0','pytz'],
+    return (f"bq://{target_table}",)
+
+
+@kfp.dsl.component(
+    base_image="python:3.9",
+    packages_to_install=["google-cloud-bigquery==2.18.0", "pytz"],
 )
 def prep_forecast_term_level_drop_embeddings(
     source_table: str,
     target_table: str,
-    override: str = 'False',
-    project_id: str = 'cpg-cdp'
-    ) -> NamedTuple('Outputs', [('term_train_table', str)]):
-    
+    override: str = "False",
+    project_id: str = "cpg-cdp",
+) -> NamedTuple("Outputs", [("term_train_table", str)]):
+
     from google.cloud import bigquery
-    
+
     bq_client = bigquery.Client(project=project_id)
-    
-    source_table_no_bq = str(source_table).strip('bq://')
-    
+
+    source_table_no_bq = str(source_table).strip("bq://")
+
     (
-    bq_client.query(
-      f"""
+        bq_client.query(
+            f"""
             CREATE OR REPLACE TABLE `{target_table}` as (
         SELECT * 
         except(
@@ -178,37 +174,35 @@ def prep_forecast_term_level_drop_embeddings(
 
         FROM `{source_table_no_bq}` )
           """
-    )
-    .result()
-    )
-
-    return (
-    f'bq://{target_table}',
+        ).result()
     )
 
-@kfp.v2.dsl.component(
-  base_image='python:3.9',
-  packages_to_install=['google-cloud-bigquery==2.18.0','pytz'],
+    return (f"bq://{target_table}",)
+
+
+@kfp.dsl.component(
+    base_image="python:3.9",
+    packages_to_install=["google-cloud-bigquery==2.18.0", "pytz"],
 )
 def create_top_mover_table(
     source_table: str,
     target_table: str,
-    predict_on_dt: str, #uses the last validation date,
+    predict_on_dt: str,  # uses the last validation date,
     six_month_dt: str,
     trained_model: Input[Artifact],
     top_n_results: int,
-    override: str = 'False',
-    project_id: str = 'cpg-cdp'
-    ) -> NamedTuple('Outputs', [('term_train_table', str)]):
-    
+    override: str = "False",
+    project_id: str = "cpg-cdp",
+) -> NamedTuple("Outputs", [("term_train_table", str)]):
+
     from google.cloud import bigquery
-    
-    source_table_no_bq = source_table.strip('bq://')
+
+    source_table_no_bq = source_table.strip("bq://")
 
     bq_client = bigquery.Client(project=project_id)
     (
-    bq_client.query(
-      f"""
+        bq_client.query(
+            f"""
             CREATE OR REPLACE TABLE `{target_table}` as (
     select * from
       (with six_mo_val as (select *, predicted_score.value as six_mo_forecast from `{source_table_no_bq}` 
@@ -228,17 +222,15 @@ def create_top_mover_table(
       ) where  current_rank < six_mo_rank order by six_delta_rank desc limit {top_n_results} 
 )
           """
-    )
-    .result()
-    )
-
-    return (
-    f'{target_table}',
+        ).result()
     )
 
-@kfp.v2.dsl.component(
-  base_image='python:3.9',
-  packages_to_install=['google-cloud-bigquery==2.18.0','pytz'],
+    return (f"{target_table}",)
+
+
+@kfp.dsl.component(
+    base_image="python:3.9",
+    packages_to_install=["google-cloud-bigquery==2.18.0", "pytz"],
 )
 def nlp_featurize_and_cluster(
     source_table: str,
@@ -248,16 +240,16 @@ def nlp_featurize_and_cluster(
     subcat_id: int,
     model_name: str,
     n_clusters: int,
-    override: str = 'False',
-    project_id: str = 'cpg-cdp'
-    ) -> NamedTuple('Outputs', [('term_cluster_table', str)]):
-    
+    override: str = "False",
+    project_id: str = "cpg-cdp",
+) -> NamedTuple("Outputs", [("term_cluster_table", str)]):
+
     from google.cloud import bigquery
-    
+
     bq_client = bigquery.Client(project=project_id)
     (
-    bq_client.query(
-      f"""
+        bq_client.query(
+            f"""
             CREATE TEMPORARY FUNCTION arr_to_input_20(arr ARRAY<FLOAT64>)
             RETURNS 
             STRUCT<p1 FLOAT64, p2 FLOAT64, p3 FLOAT64, p4 FLOAT64,
@@ -305,17 +297,15 @@ def nlp_featurize_and_cluster(
                 )
             )
           """
-    )
-    .result()
-    )
-
-    return (
-    f'{target_table}',
+        ).result()
     )
 
-@kfp.v2.dsl.component(
-  base_image='python:3.9',
-  packages_to_install=['google-cloud-bigquery==2.18.0','pytz'],
+    return (f"{target_table}",)
+
+
+@kfp.dsl.component(
+    base_image="python:3.9",
+    packages_to_install=["google-cloud-bigquery==2.18.0", "pytz"],
 )
 def aggregate_clusters(
     source_table: str,
@@ -326,21 +316,20 @@ def aggregate_clusters(
     valid_st: str,
     valid_end: str,
     model_name: str,
-    override: str = 'False',
-    project_id: str = 'cpg-cdp'
-    ) -> NamedTuple('Outputs', [('term_cluster_agg_table', str)]):
-    
+    override: str = "False",
+    project_id: str = "cpg-cdp",
+) -> NamedTuple("Outputs", [("term_cluster_agg_table", str)]):
+
     from google.cloud import bigquery
-    
-    source_table_no_bq = source_table.strip('bq://')
-    
-    target_bq_table = 'bq://' + target_table
+
+    source_table_no_bq = source_table.strip("bq://")
+
+    target_bq_table = "bq://" + target_table
 
     bq_client = bigquery.Client(project=project_id)
-    
-    
+
     bq_client.query(
-      f"""
+        f"""
        CREATE OR REPLACE TABLE `{target_table}` as (
         WITH
           scored_trends AS (
@@ -400,154 +389,47 @@ def aggregate_clusters(
         )
           """
     ).result()
-    
-    return (
-    f'{target_bq_table}',
-    )
+
+    return (f"{target_bq_table}",)
+
 
 COLUMN_TRANSFORMS_CLUSTER = [
-  {
-    "numeric": {
-      "columnName": "score"
-    }
-  },
-  {
-    "timestamp": {
-      "columnName": "date"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "comments_embed_p1"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "comments_embed_p2"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "comments_embed_p3"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "comments_embed_p4"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "comments_embed_p5"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "comments_embed_p6"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "comments_embed_p7"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "comments_embed_p8"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "comments_embed_p9"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "comments_embed_p10"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "comments_embed_p11"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "comments_embed_p12"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "comments_embed_p13"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "comments_embed_p14"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "comments_embed_p15"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "comments_embed_p16"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "comments_embed_p17"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "comments_embed_p18"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "comments_embed_p19"
-    }
-  },
-  {
-    "numeric": {
-      "columnName": "comments_embed_p20"
-    }
-  }
+    {"numeric": {"columnName": "score"}},
+    {"timestamp": {"columnName": "date"}},
+    {"numeric": {"columnName": "comments_embed_p1"}},
+    {"numeric": {"columnName": "comments_embed_p2"}},
+    {"numeric": {"columnName": "comments_embed_p3"}},
+    {"numeric": {"columnName": "comments_embed_p4"}},
+    {"numeric": {"columnName": "comments_embed_p5"}},
+    {"numeric": {"columnName": "comments_embed_p6"}},
+    {"numeric": {"columnName": "comments_embed_p7"}},
+    {"numeric": {"columnName": "comments_embed_p8"}},
+    {"numeric": {"columnName": "comments_embed_p9"}},
+    {"numeric": {"columnName": "comments_embed_p10"}},
+    {"numeric": {"columnName": "comments_embed_p11"}},
+    {"numeric": {"columnName": "comments_embed_p12"}},
+    {"numeric": {"columnName": "comments_embed_p13"}},
+    {"numeric": {"columnName": "comments_embed_p14"}},
+    {"numeric": {"columnName": "comments_embed_p15"}},
+    {"numeric": {"columnName": "comments_embed_p16"}},
+    {"numeric": {"columnName": "comments_embed_p17"}},
+    {"numeric": {"columnName": "comments_embed_p18"}},
+    {"numeric": {"columnName": "comments_embed_p19"}},
+    {"numeric": {"columnName": "comments_embed_p20"}},
 ]
 
 COLUMN_TRANSFORMATIONS = [
-  {
-    "timestamp": {
-      "columnName": "date"
-    }
-  },
-  {
-    "categorical": {
-      "columnName": "geo_id"
-    }
-  },
-
-  {
-    "numeric": {
-      "columnName": "score"
-    }
-  },
-  {
-    "text": {
-      "columnName": "sentences"
-    }
-  }
+    {"timestamp": {"columnName": "date"}},
+    {"categorical": {"columnName": "geo_id"}},
+    {"numeric": {"columnName": "score"}},
+    {"text": {"columnName": "sentences"}},
 ]
 
 
-@kfp.v2.dsl.component(
-  base_image='python:3.9',
-  packages_to_install=['google-cloud-bigquery==2.18.0','pandas','pyarrow'],
+@kfp.dsl.component(
+    base_image="python:3.9",
+    packages_to_install=["google-cloud-bigquery==2.18.0", "pandas", "pyarrow"],
 )
-
 def auto_cluster(
     cluster_min: int,
     cluster_max: int,
@@ -555,26 +437,24 @@ def auto_cluster(
     cluster_train_table: str,
     classified_terms_table: str,
     target_table: str,
-    project_id: str = 'cpg-cdp'
-    ) -> str:
-    
+    project_id: str = "cpg-cdp",
+) -> str:
+
     from google.cloud import bigquery
     import time
 
-    
     bq_client = bigquery.Client(project_id)
-    
-    
+
     prob_pivot_sql = ""
     for i, l in enumerate(labels):
-        prob_pivot_sql += (f"(select max(probs.prob) from UNNEST(t.predicted_label_probs) probs where probs.label = '{l}') as _{i}_prob, ")
-    
+        prob_pivot_sql += f"(select max(probs.prob) from UNNEST(t.predicted_label_probs) probs where probs.label = '{l}') as _{i}_prob, "
+
     table_sql_for_clustering = f"""
         SELECT * except(predicted_label_probs),
         {prob_pivot_sql}
         FROM `{classified_terms_table}` t 
         """
-    
+
     kmeans_table_sql = f"""
         create or replace table {cluster_train_table} as (
         select distinct * EXCEPT(date, geo_id, series_id, terms, category_rank, split_col) from (
@@ -590,14 +470,16 @@ def auto_cluster(
             if char.isupper():
                 upper_chars += char
         return upper_chars
-    
+
         ## we use this to find where the DB index flattens for n_clusters and use that for optimal number of clusters per topic
 
     def loop_n_clus_and_get_db_index(cluster_min: int, cluster_max: int, label: str):
 
-        label_upper = only_upper(label) #get only the upper case letters to denote the model name
+        label_upper = only_upper(
+            label
+        )  # get only the upper case letters to denote the model name
         return_data = {label: []}
-        for n_clusters in range(cluster_min, cluster_max+1):
+        for n_clusters in range(cluster_min, cluster_max + 1):
             print(f"Training for {n_clusters} clusters")
             # return_data[label].append({'model_name': f'trendspotting.cat_clus_{label_upper}_{n_clusters}_png_hair_22'})
             kmeans_sql = f"""
@@ -607,7 +489,7 @@ def auto_cluster(
             WHERE predicted_label = '{label}'
             """
             bq_client.query(kmeans_sql).result()
-            #next, get the DB index to assess the cluster quality
+            # next, get the DB index to assess the cluster quality
             sql = f"""
             SELECT
               *
@@ -616,54 +498,60 @@ def auto_cluster(
               """
             data = bq_client.query(sql).to_dataframe()
             print(f"DB Index: {data.davies_bouldin_index[0]}")
-            return_data[label].append({f'trendspotting.cat_clus_{label_upper}_{n_clusters}_png_hair_22': data.davies_bouldin_index[0]})
+            return_data[label].append(
+                {
+                    f"trendspotting.cat_clus_{label_upper}_{n_clusters}_png_hair_22": data.davies_bouldin_index[
+                        0
+                    ]
+                }
+            )
 
             time.sleep(60)
 
-        return(return_data)
-    
+        return return_data
+
     data_dict = {}
-    
-    #loop over labels
+
+    # loop over labels
     for label in labels:
         print(f"Tranining for label: {label}")
         cluster_data = loop_n_clus_and_get_db_index(cluster_min, cluster_max, label)
-        data_dict.update(cluster_data) #update with the results
+        data_dict.update(cluster_data)  # update with the results
         time.sleep(60)
-        
+
     # find the min DB score cluster for each topic, delete the other models and then score based on topic id
 
     optimal_models_by_label = {}
     for label in labels:
-        prior_db=999 # set this high
+        prior_db = 999  # set this high
         for c in data_dict[label]:
             optimal_model = list(data_dict[label][0].keys())[0]
             if list(c.values())[0] < prior_db:
                 prior_db = list(c.values())[0]
-                optimal_model = list(c.keys())[0] 
+                optimal_model = list(c.keys())[0]
                 print(optimal_model)
             optimal_models_by_label.update({label: optimal_model})
     print(f"Optimal models found: {optimal_models_by_label}")
-    
+
     # save optimal model dictionary to gcs
     from google.cloud import storage
 
     import pickle
 
-    with open('./optimal_models.dict', 'wb') as file:
+    with open("./optimal_models.dict", "wb") as file:
         pickle.dump(optimal_models_by_label, file)
 
-    bucket_name = 'trendspotting-pipeline'
+    bucket_name = "trendspotting-pipeline"
 
     storage_client = storage.Client(project=project_id)
     bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob('optimal_models.dict')
+    blob = bucket.blob("optimal_models.dict")
 
-    blob.upload_from_filename('optimal_models.dict')
-        
+    blob.upload_from_filename("optimal_models.dict")
+
     print("Deleting sub optimal models")
-    
-    #delete the sub-optimal models
+
+    # delete the sub-optimal models
     def delete_model_sql(model_name):
         return f"DROP MODEL IF EXISTS {model_name}"
 
@@ -672,10 +560,12 @@ def auto_cluster(
         for c in data_dict[label]:
             if list(c.keys())[0] != optimal_model_for_label:
                 sub_optimal_model = list(c.keys())[0]
-                bq_client.query(delete_model_sql(sub_optimal_model)).result() #clean up the models
+                bq_client.query(
+                    delete_model_sql(sub_optimal_model)
+                ).result()  # clean up the models
                 time.sleep(5)
-                
-   #last, score using a union query for each label
+
+    # last, score using a union query for each label
 
     def score_cluster(label, model_name):
         predict_sql = f"""
@@ -689,12 +579,12 @@ def auto_cluster(
                   from `{cluster_train_table}`
                   where predicted_label = '{label}'))
                   """
-        return(predict_sql)
+        return predict_sql
 
     predict_sql = ""
     for i, label in enumerate(labels):
         predict_sql += score_cluster(label, optimal_models_by_label[label])
-        if len(labels)-1 == i:
+        if len(labels) - 1 == i:
             break
         else:
             predict_sql += """
@@ -702,47 +592,55 @@ def auto_cluster(
             """
 
     def score_table(predict_sql, tt=target_table):
-        return(f"CREATE OR REPLACE TABLE `{tt}` AS ({predict_sql})")
+        return f"CREATE OR REPLACE TABLE `{tt}` AS ({predict_sql})"
 
     segment_score_sql = score_table(predict_sql)
 
     bq_client.query(segment_score_sql).result()
-    
-    return(target_table)
+
+    return target_table
+
 
 ### Component to check if table exists
 
-@kfp.v2.dsl.component(
-  base_image='python:3.9',
-  packages_to_install=['google-cloud-bigquery==2.18.0', 'pytz'],
-) 
+
+@kfp.dsl.component(
+    base_image="python:3.9",
+    packages_to_install=["google-cloud-bigquery==2.18.0", "pytz"],
+)
 def if_tbl_exists(table_ref: str, project_id: str) -> str:
     from google.cloud import bigquery
+
     bq_client = bigquery.Client(project_id)
     from google.cloud.exceptions import NotFound
+
     try:
         bq_client.get_table(table_ref)
         return "True"
     except NotFound:
         return "False"
-    
-@kfp.v2.dsl.component(
-  base_image='python:3.9',
+
+
+@kfp.dsl.component(
+    base_image="python:3.9",
 )
 def if_list_input(input_: str) -> str:
     try:
-        if input_[0] == '[':
+        if input_[0] == "[":
             return "True"
     except:
         return "False"
-    
+
+
 # component if list sources returned
-@kfp.v2.dsl.component(
-  base_image='python:3.9',
-  packages_to_install=['google-cloud-bigquery==2.18.0','pytz'],
+@kfp.dsl.component(
+    base_image="python:3.9",
+    packages_to_install=["google-cloud-bigquery==2.18.0", "pytz"],
 )
-def combine_source_tables(target_table: str, sources: str) -> NamedTuple('Outputs', [('combined_source_table', str)]):
-    res = sources.strip('][').split(', ')
+def combine_source_tables(
+    target_table: str, sources: str
+) -> NamedTuple("Outputs", [("combined_source_table", str)]):
+    res = sources.strip("][").split(", ")
     query = f"create table {target_table} as (select * from {res[0]}"
     for source in res[1:]:
         query.append(f"union all select * from {source}")
@@ -750,34 +648,39 @@ def combine_source_tables(target_table: str, sources: str) -> NamedTuple('Output
     bq_client.query(query).result()
     return target_table
 
-@kfp.v2.dsl.component(
-  base_image='python:3.9',
-)    
-def get_source_table(source1: str, source2: str) -> NamedTuple('Outputs', [('combined_source_table', str)]):
+
+@kfp.dsl.component(
+    base_image="python:3.9",
+)
+def get_source_table(
+    source1: str, source2: str
+) -> NamedTuple("Outputs", [("combined_source_table", str)]):
     try:
         return source1
     except:
         return source2
 
-@kfp.v2.dsl.component(
-  base_image='python:3.9',
-  packages_to_install=['google-cloud-bigquery==2.18.0','pytz'],
+
+@kfp.dsl.component(
+    base_image="python:3.9",
+    packages_to_install=["google-cloud-bigquery==2.18.0", "pytz"],
 )
 def train_classification_model(
-      target_table: str,
-      source_table: str,
-      label_table: str,
-      train_table: str,
-      classification_model_name: str,
-      classification_budget_hours: int,
-      project_id: str = 'cpg-cdp'
-    ) -> str:
-    
+    target_table: str,
+    source_table: str,
+    label_table: str,
+    train_table: str,
+    classification_model_name: str,
+    classification_budget_hours: int,
+    project_id: str = "cpg-cdp",
+) -> str:
+
     from google.cloud import bigquery
+
     bq_client = bigquery.Client(project_id)
-    
-    source_table_no_bq = source_table.strip('bq://')
-    
+
+    source_table_no_bq = source_table.strip("bq://")
+
     sql = f""" CREATE OR REPLACE TABLE
       {train_table} AS (
       with distinct_data as (
@@ -798,7 +701,7 @@ def train_classification_model(
 
     bq_client.query(sql).result()
     print("Training dataset for classification complete")
-    
+
     model_sql = f"""CREATE OR REPLACE MODEL
       {classification_model_name}
     OPTIONS
@@ -812,10 +715,9 @@ def train_classification_model(
      `{train_table}`
     WHERE
       dataframe = 'TRAIN'"""
-    
+
     bq_client.query(model_sql).result()
-    
-    
+
     print("Training for classification complete")
     score_table_sql = f"""CREATE OR REPLACE TABLE {target_table} as (
     SELECT
@@ -831,18 +733,19 @@ def train_classification_model(
          )
       )
     )"""
-    
+
     bq_client.query(score_table_sql).result()
     print("Scoring for classification complete")
-    
-    return(target_table)
+
+    return target_table
+
 
 ### Basic clustering
 
-@kfp.v2.dsl.component(
-  base_image='python:3.9',
-  packages_to_install=['google-cloud-bigquery==2.18.0', 
-                      'pytz'],
+
+@kfp.dsl.component(
+    base_image="python:3.9",
+    packages_to_install=["google-cloud-bigquery==2.18.0", "pytz"],
 )
 def aggregate_clusters_basic(
     source_table: str,
@@ -851,20 +754,20 @@ def aggregate_clusters_basic(
     train_end: str,
     valid_st: str,
     valid_end: str,
-    override: str = 'False',
-    project_id: str = 'cpg-cdp'
-    ) -> NamedTuple('Outputs', [('term_cluster_agg_table', str)]):
-    
+    override: str = "False",
+    project_id: str = "cpg-cdp",
+) -> NamedTuple("Outputs", [("term_cluster_agg_table", str)]):
+
     from google.cloud import bigquery
-    
-    source_table_no_bq = source_table.strip('bq://')
-    
-    target_bq_table = 'bq://' + target_table
+
+    source_table_no_bq = source_table.strip("bq://")
+
+    target_bq_table = "bq://" + target_table
 
     bq_client = bigquery.Client(project=project_id)
     (
-    bq_client.query(
-      f"""
+        bq_client.query(
+            f"""
             CREATE OR REPLACE TABLE {target_table} as (
             with centroids as (select * from 
             (SELECT
@@ -904,13 +807,11 @@ def aggregate_clusters_basic(
             inner join centroids b on a.topic_id = b.topic_id
             )
           """
-    )
-    .result()
+        ).result()
     )
 
-    return (
-    f'{target_bq_table}',
-    )
+    return (f"{target_bq_table}",)
+
 
 def get_model_train_sql(model_name, n_clusters, source_table, train_st, subcat_id):
     return f"""CREATE TEMPORARY FUNCTION arr_to_input_20(arr ARRAY<FLOAT64>)
@@ -956,210 +857,201 @@ def get_model_train_sql(model_name, n_clusters, source_table, train_st, subcat_i
     """
 
 
-
 ### Alter schema statements and optimizations to tables
 
-@kfp.v2.dsl.component(
-  base_image='python:3.9',
-  packages_to_install=['google-cloud-bigquery==2.18.0', 
-                      'pytz'],
+
+@kfp.dsl.component(
+    base_image="python:3.9",
+    packages_to_install=["google-cloud-bigquery==2.18.0", "pytz"],
 )
 def alter_topmover_schema(
-    source_table: str,
-    override: str = 'False',
-    project_id: str = 'cpg-cdp'
-    ) -> None:
-    
+    source_table: str, override: str = "False", project_id: str = "cpg-cdp"
+) -> None:
+
     from google.cloud import bigquery
     import time
 
     bq_client = bigquery.Client(project=project_id)
-    
+
     queries = [
         f"""ALTER TABLE `{source_table}`
     SET OPTIONS (
       description="Top mover table, this does a backtest by taking a snapshot of the keyword scores on the date in this table. They are then compared to predictions Vertex makes in the future date. Terms that have higher scores are than before are surfaced and sorted by the difference in score"
     )""",
-    f"""ALTER TABLE `{source_table}`
+        f"""ALTER TABLE `{source_table}`
     ALTER COLUMN date
     SET OPTIONS (
       description="This is the date predicted_on is selected for the backtest. Treat all data after this date as blind and predicted by Vertex, except for the `six_mo_rank` which is actual to compare performance"
     )""",
-    f"""ALTER TABLE `{source_table}`
+        f"""ALTER TABLE `{source_table}`
     ALTER COLUMN future_date
     SET OPTIONS (
       description="This is the date in the future with respect to the backtest date. Since this is a backtest, it is in the past. In production this would be predictions into the future"
     )""",
-    f"""ALTER TABLE `{source_table}`
+        f"""ALTER TABLE `{source_table}`
     ALTER COLUMN sentences
     SET OPTIONS (
       description="The keyword a user types into google.com"
     )""",
-    f"""ALTER TABLE `{source_table}`
+        f"""ALTER TABLE `{source_table}`
     ALTER COLUMN current_rank
     SET OPTIONS (
       description="The relative score of the keyword at time of `date`"
     )""",
-    f"""ALTER TABLE `{source_table}`
+        f"""ALTER TABLE `{source_table}`
     ALTER COLUMN six_delta_rank
     SET OPTIONS (
       description="The difference between the `six_mo_rank` and `current_rank`"
     )""",
-    f"""ALTER TABLE `{source_table}`
+        f"""ALTER TABLE `{source_table}`
     ALTER COLUMN six_mo_rank
     SET OPTIONS (
       description="The actual score of the keyword forecasted at `future_date`"
     )""",
-    f"""ALTER TABLE `{source_table}`
+        f"""ALTER TABLE `{source_table}`
     ALTER COLUMN six_mo_forecast
     SET OPTIONS (
       description="The forecasted score from Vertex Forecast of the keyword forecasted at `future_date`"
     )""",
-    f"""ALTER TABLE `{source_table}`
+        f"""ALTER TABLE `{source_table}`
     ALTER COLUMN geo_id
     SET OPTIONS (
       description="The geographic designation of the user. For US, typically this is DMA. Outside US it is either country or region"
     )""",
-              ]
+    ]
     for query in queries:
         bq_client.query(query)
         time.sleep(2)
-        
-@kfp.v2.dsl.component(
-  base_image='python:3.9',
-  packages_to_install=['google-cloud-bigquery==2.18.0', 
-                      'pytz'],
-)       
+
+
+@kfp.dsl.component(
+    base_image="python:3.9",
+    packages_to_install=["google-cloud-bigquery==2.18.0", "pytz"],
+)
 def alter_basic_cluster_forecast_table(
-    source_table: str,
-    override: str = 'False',
-    project_id: str = 'cpg-cdp'
-    ) -> None:
-    
+    source_table: str, override: str = "False", project_id: str = "cpg-cdp"
+) -> None:
+
     from google.cloud import bigquery
     import time
 
     bq_client = bigquery.Client(project=project_id)
-    
+
     queries = [
-           f"""ALTER TABLE `{source_table}`
+        f"""ALTER TABLE `{source_table}`
     SET OPTIONS (
       description="Basic Clustering Forecast Table - this table shows a foreast for the keyword clusters generated by k-means. Note this is not using custom categories, which allow users to specify keyword categories, the algorithm is unsupervised and clusters based on NLP embeddings"
     )""",
-    f"""ALTER TABLE `{source_table}`
+        f"""ALTER TABLE `{source_table}`
     ALTER COLUMN topic_id
     SET OPTIONS (
       description="The cluster ID assigned by the BQML k-means algorithm. Note the number in the table name designates the number of term clusters"
     )""",
-    f"""ALTER TABLE `{source_table}`
+        f"""ALTER TABLE `{source_table}`
     ALTER COLUMN date
     SET OPTIONS (
       description="Date for the keyword"
     )""",
-    f"""ALTER TABLE `{source_table}`
+        f"""ALTER TABLE `{source_table}`
     ALTER COLUMN predicted_on_date
     SET OPTIONS (
       description="This is an output from Vertex Forecast. When a model is created it creates scenarios to test 'what-if' on various days in the past. To understand the data, you typically pick a predict_on_date as a filter to then see what the predictions looked like as of that date"
     )""",
-    f"""ALTER TABLE `{source_table}`
+        f"""ALTER TABLE `{source_table}`
     ALTER COLUMN predicted_score
     SET OPTIONS (
       description="This is the output of Vertex Forecast. It is the predicted score over the test time period (i.e. backtest)"
     )""",
-    f"""ALTER TABLE `{source_table}`
+        f"""ALTER TABLE `{source_table}`
     ALTER COLUMN score
     SET OPTIONS (
       description="This is the actual score. Used for comparing actual vs predicted and used by Vertex AI to create predictions"
-    )"""
-            ]
+    )""",
+    ]
     for query in queries:
         bq_client.query(query)
         time.sleep(2)
-        
-        
-@kfp.v2.dsl.component(
-  base_image='python:3.9',
-  packages_to_install=['google-cloud-bigquery==2.18.0', 
-                      'pytz'],
-)       
+
+
+@kfp.dsl.component(
+    base_image="python:3.9",
+    packages_to_install=["google-cloud-bigquery==2.18.0", "pytz"],
+)
 def alter_basic_cluster_term_table(
-    source_table: str,
-    override: str = 'False',
-    project_id: str = 'cpg-cdp'
-    ) -> None:
-    
+    source_table: str, override: str = "False", project_id: str = "cpg-cdp"
+) -> None:
+
     from google.cloud import bigquery
     import time
 
     bq_client = bigquery.Client(project=project_id)
-    
+
     queries = [
-               f"""ALTER TABLE `{source_table}`
+        f"""ALTER TABLE `{source_table}`
     SET OPTIONS (
       description="This table contains a cross reference of the keywords and cluster IDs. Use this to explore the keywords that make up the clusters identified with BQML k-means"
     )""",
-    f"""ALTER TABLE `{source_table}`
+        f"""ALTER TABLE `{source_table}`
     ALTER COLUMN topic_id
     SET OPTIONS (
       description="Cluster ID created by BQML K-means. The number in the table name indicates how many clusters are in the table"
     )""",
-    f"""ALTER TABLE `{source_table}`
+        f"""ALTER TABLE `{source_table}`
     ALTER COLUMN NEAREST_CENTROIDS_DISTANCE
     SET OPTIONS (
       description="The closest distance shows the distance of the given row/keyword from the various cluster centers. The closest cluster gets assigned to CENTROID_ID"
     )""",
-    f"""ALTER TABLE `{source_table}`
+        f"""ALTER TABLE `{source_table}`
     ALTER COLUMN output_0
     SET OPTIONS (
       description="Vector format of the embeddings. These are transposed to the comments_embed struct so they can be read by the model. These come from tf.hub universal sentence encoder NLP model https://tfhub.dev/google/collections/universal-sentence-encoder/1"
     )""",
-    f"""ALTER TABLE `{source_table}`
+        f"""ALTER TABLE `{source_table}`
     ALTER COLUMN date SET DATA TYPE DATE
     SET OPTIONS (
       description="The date corrleating to the ranked keyword"
     )""",
-    f"""ALTER TABLE `{source_table}`
+        f"""ALTER TABLE `{source_table}`
     ALTER COLUMN geo_name
     SET OPTIONS (
       description="The geographic designator for the keyword. In US, this is typically DMA, and is usually country code otherwise. Can be down to region as well"
     )""",
-    f"""ALTER TABLE `{source_table}`
+        f"""ALTER TABLE `{source_table}`
     ALTER COLUMN sentences
     SET OPTIONS (
       description="The keywords users type into google.com"
     )""",
-    f"""ALTER TABLE `{source_table}`
+        f"""ALTER TABLE `{source_table}`
     ALTER COLUMN score
     SET OPTIONS (
       description="The relative score of the keyword rank over time. This is indexed so insights are all relative to the dataset"
     )""",
-    f"""ALTER TABLE `{source_table}`
+        f"""ALTER TABLE `{source_table}`
     ALTER COLUMN comments_embed
     SET OPTIONS (
       description="See output_0. This is a transposed struct of the embedding arrays"
     )""",
-            ]
+    ]
     for query in queries:
         bq_client.query(query)
         time.sleep(2)
 
-        
-@kfp.v2.dsl.component(
-  base_image='python:3.9',
-  packages_to_install=['google-cloud-bigquery==2.18.0', 
-                      'pytz'],
-)  
+
+@kfp.dsl.component(
+    base_image="python:3.9",
+    packages_to_install=["google-cloud-bigquery==2.18.0", "pytz"],
+)
 def create_partitioned_forecast_table(
     source_table: str,
     target_table: str,
-    override: str = 'False',
-    project_id: str = 'cpg-cdp'
-    ) -> None:
-    
+    override: str = "False",
+    project_id: str = "cpg-cdp",
+) -> None:
+
     from google.cloud import bigquery
 
     bq_client = bigquery.Client(project=project_id)
-    
+
     query = f"""CREATE OR REPLACE TABLE `{target_table}`  
                 PARTITION BY date
                 as
@@ -1173,29 +1065,29 @@ def create_partitioned_forecast_table(
                """
     bq_client.query(query).result()
 
-    
+
 ######NEW 12-2022 TOP-RISER REPORT
 
-@kfp.v2.dsl.component(
-  base_image='python:3.9',
-  packages_to_install=['google-cloud-bigquery==2.18.0', 
-                      'pytz'],
+
+@kfp.dsl.component(
+    base_image="python:3.9",
+    packages_to_install=["google-cloud-bigquery==2.18.0", "pytz"],
 )
 def sustained_riser_report(
     source_table: str,
     target_table: str,
     top_n: int,
     predicted_on_dt: str,
-    override: str = 'False',
-    project_id: str = 'cpg-cdp'
-    ) -> NamedTuple('Outputs', [('top_riser_table', str)]):
-    
+    override: str = "False",
+    project_id: str = "cpg-cdp",
+) -> NamedTuple("Outputs", [("top_riser_table", str)]):
+
     from google.cloud import bigquery
 
     bq_client = bigquery.Client(project=project_id)
     (
-    bq_client.query(
-      f"""
+        bq_client.query(
+            f"""
             CREATE OR REPLACE TABLE {target_table} as (
             WITH
               forecasted_difference_table AS (
@@ -1228,10 +1120,7 @@ def sustained_riser_report(
            
             )
           """
-    )
-    .result()
+        ).result()
     )
 
-    return (
-    f'{target_table}',
-    )
+    return (f"{target_table}",)
